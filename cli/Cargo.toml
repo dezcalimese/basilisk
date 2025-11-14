@@ -1,0 +1,21 @@
+[package]
+name = "basilisk-cli"
+version = "0.1.0"
+edition = "2021"
+authors = ["Basilisk Team"]
+description = "Terminal interface for Kalshi Bitcoin hourly contract trading"
+
+[dependencies]
+ratatui = "0.26"
+crossterm = "0.27"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.11", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1.0"
+clap = { version = "4.4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+eventsource-client = "0.13"
+futures = "0.3"

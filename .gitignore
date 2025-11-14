@@ -1,0 +1,110 @@
+# Basilisk Project .gitignore
+
+# ==========================================
+# SENSITIVE DATA - NEVER COMMIT THESE!
+# ==========================================
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.production
+
+# API Keys and Secrets
+*.pem
+*.key
+*_private_key
+*_secret
+credentials.json
+
+# Database with potentially sensitive data
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# ==========================================
+# PYTHON / BACKEND
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+backend/lib/
+backend/lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv/
+venv/
+ENV/
+env/
+uv.lock
+
+# Python testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ==========================================
+# NODE.JS / FRONTEND
+# ==========================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# Bun
+bun.lockb
+
+# Testing
+coverage/
+
+# ==========================================
+# RUST / CLI
+# ==========================================
+target/
+Cargo.lock
+**/*.rs.bk
+
+# ==========================================
+# IDEs & EDITORS
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ==========================================
+# LOGS & TEMP FILES
+# ==========================================
+*.log
+logs/
+*.tmp
+*.temp
+
+# ==========================================
+# OS
+# ==========================================
+Thumbs.db
+.DS_Store
