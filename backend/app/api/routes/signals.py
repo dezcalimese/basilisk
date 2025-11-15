@@ -32,8 +32,15 @@ class SignalResponse(BaseModel):
     current_btc_price: Optional[float] = None
     yes_price: Optional[float] = None
     no_price: Optional[float] = None
-    implied_probability: Optional[float] = None
-    model_probability: Optional[float] = None
+    implied_probability: Optional[float] = None  # Kalshi market price
+    model_probability: Optional[float] = None  # DVOL+BS theoretical probability
+
+    # Mispricing detection fields (DVOL-based edge detection)
+    theoretical_probability: Optional[float] = None  # Same as model_probability (clarity)
+    mispricing: Optional[float] = None  # theoretical - implied (absolute)
+    mispricing_pct: Optional[float] = None  # Percentage mispricing
+    mispricing_signal: Optional[str] = None  # Trading signal
+    mispricing_opportunity: Optional[str] = None  # Human-readable explanation
 
     class Config:
         from_attributes = True

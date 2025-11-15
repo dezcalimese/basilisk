@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from app.data.bitcoin_client import BitcoinPriceClient
 from app.data.kalshi_client import KalshiClient
 from app.models.predictor import ProbabilityPredictor
+from app.models.volatility import VolatilityRegime
 
 
 class MarketService:
@@ -17,6 +18,7 @@ class MarketService:
         self.kalshi_client = KalshiClient()
         self.btc_client = BitcoinPriceClient()
         self.predictor = ProbabilityPredictor()
+        self.vol_regime = VolatilityRegime()
 
     async def get_bitcoin_hourly_contracts(self) -> list[dict[str, Any]]:
         """
@@ -33,6 +35,15 @@ class MarketService:
             print(f"✗ Failed to fetch BTC price: {e}")
             current_btc_price = 95000.0  # Fallback price
 
+        # Fetch historical candles for volatility analysis
+        try:
+            print("Fetching historical BTC candles for volatility analysis...")
+            candles = await self.btc_client.get_historical_candles(hours=168)  # 1 week
+            print(f"✓ Fetched {len(candles)} hourly candles")
+        except Exception as e:
+            print(f"✗ Failed to fetch historical candles: {e}")
+            candles = []
+
         now_utc = datetime.now(UTC)
         est = ZoneInfo("America/New_York")
         now_est = now_utc.astimezone(est)
@@ -42,7 +53,7 @@ class MarketService:
             print("Fetching KXBTCD Bitcoin markets from Kalshi...")
             markets: list[dict[str, Any]] = []
             cursor: str | None = None
-            max_pages = 5
+            max_pages = 10  # Increased to ensure we get all contracts
             page = 0
 
             found_today = False
@@ -64,11 +75,12 @@ class MarketService:
                     f"  Page {page}: {len(page_markets)} markets (next cursor: {page_label})"
                 )
 
+                # Track if we found today's contracts, but don't break early
+                # We need to fetch ALL pages to get all hourly contracts
                 if self._has_active_same_day_contracts(
                     page_markets, now_utc, est
                 ):
                     found_today = True
-                    break
 
                 if not cursor:
                     break
@@ -192,25 +204,14 @@ class MarketService:
                 f"  {expiry_est.strftime('%I%p %Z')} ({expiry_utc.strftime('%H:%M UTC')}) - {hours_away:.1f}h away - {len(contract_list)} contracts"
             )
 
-        # Get contracts for the next top-of-hour expiry
+        # Get contracts for the next available expiry
         btc_contracts = []
         selected_expiry: datetime | None = None
         if sorted_expiries:
-            # Find the next top-of-hour contract (where minutes = 0)
-            # Prefer contracts expiring at the top of the hour
-            next_hour_contracts = [
-                (expiry_utc, market_list)
-                for expiry_utc, market_list in sorted_expiries
-                if expiry_utc.minute == 0  # Top of hour in UTC
-            ]
-
-            if next_hour_contracts:
-                selected_expiry, selected_markets = next_hour_contracts[0]
-            elif sorted_expiries:
-                # Fallback to earliest available
-                selected_expiry, selected_markets = sorted_expiries[0]
-
-            btc_contracts = selected_markets if selected_expiry else []
+            # Simply use the earliest available contract
+            # Kalshi contracts already expire at EST hour boundaries
+            selected_expiry, selected_markets = sorted_expiries[0]
+            btc_contracts = selected_markets
 
             if selected_expiry:
                 expiry_est = selected_expiry.astimezone(est)
@@ -248,12 +249,20 @@ class MarketService:
             print("  ⚠️  No active Bitcoin contracts found")
             return []
 
-        # Process each contract
+        # Fetch DVOL FIRST (before processing contracts) to use for probability calculations
+        print("\n📊 Fetching Deribit DVOL for accurate probability calculations...")
+        dvol = await self.vol_regime.fetch_deribit_dvol("BTC")
+        if dvol is not None:
+            print(f"✓ Deribit DVOL: {dvol:.1%} (using for Black-Scholes)")
+        else:
+            print("⚠️  Deribit DVOL unavailable, falling back to heuristic model")
+
+        # Process each contract WITH DVOL
         processed_contracts = []
         for idx, market in enumerate(btc_contracts):
             try:
                 contract_data = await self._process_contract(
-                    market, current_btc_price, idx + 1
+                    market, current_btc_price, idx + 1, dvol=dvol
                 )
                 if contract_data:
                     processed_contracts.append(contract_data)
@@ -261,13 +270,58 @@ class MarketService:
                 print(f"✗ Error processing contract {market.get('ticker')}: {e}")
                 continue
 
+        # Run full volatility analysis after contracts processed
+        volatility_data = {}
+        if candles and processed_contracts:
+            try:
+                print("\n📊 Running volatility analysis...")
+                volatility_data = await self.vol_regime.analyze_volatility(
+                    candles, processed_contracts, current_btc_price
+                )
+                print(f"✓ Volatility Regime: {volatility_data.get('regime', 'UNKNOWN')}")
+
+                # Display dual IV sources
+                deribit_iv = volatility_data.get('deribit_iv')
+                kalshi_iv = volatility_data.get('kalshi_iv')
+                mispricing = volatility_data.get('mispricing_signal', 'UNKNOWN')
+
+                print(
+                    f"  RV: {volatility_data.get('realized_vol', 0):.1%} | "
+                    f"IV (Primary): {volatility_data.get('implied_vol', 0):.1%} | "
+                    f"Premium: {volatility_data.get('vol_premium_pct', 0):.1%}"
+                )
+
+                if deribit_iv is not None and kalshi_iv is not None:
+                    print(
+                        f"  Deribit DVOL: {deribit_iv:.1%} | "
+                        f"Kalshi IV: {kalshi_iv:.1%} | "
+                        f"Mispricing: {mispricing}"
+                    )
+            except Exception as e:
+                print(f"✗ Failed to calculate volatility: {e}")
+                # Provide default values if analysis fails
+                volatility_data = {
+                    "realized_vol": 0.50,
+                    "implied_vol": 0.50,
+                    "regime": "NORMAL",
+                    "vol_premium": 0.0,
+                    "vol_premium_pct": 0.0,
+                    "vol_signal": "NEUTRAL",
+                }
+
         # Sort by expected value (highest first) and take top 10
         processed_contracts.sort(key=lambda x: x["expected_value"], reverse=True)
         top_contracts = processed_contracts[:10]
 
-        print(f"✓ Processed {len(processed_contracts)} contracts, returning top {len(top_contracts)} by EV")
+        print(
+            f"\n✓ Processed {len(processed_contracts)} contracts, returning top {len(top_contracts)} by EV"
+        )
 
-        return top_contracts
+        # Return both contracts and volatility data
+        return {
+            "contracts": top_contracts,
+            "volatility": volatility_data,
+        }
 
     def _has_active_same_day_contracts(
         self,
@@ -293,9 +347,20 @@ class MarketService:
         return False
 
     async def _process_contract(
-        self, market: dict[str, Any], current_btc_price: float, contract_id: int
+        self, market: dict[str, Any], current_btc_price: float, contract_id: int, dvol: float | None = None
     ) -> dict[str, Any] | None:
-        """Process a single contract."""
+        """
+        Process a single contract using DVOL for accurate probability calculations.
+
+        Args:
+            market: Kalshi market data
+            current_btc_price: Current BTC spot price
+            contract_id: Unique contract ID
+            dvol: Deribit volatility index (if available)
+
+        Returns:
+            Processed contract data with theoretical probabilities and mispricing analysis
+        """
         ticker = market.get("ticker", "")
         title = market.get("title", "")
 
@@ -314,7 +379,7 @@ class MarketService:
         yes_price = (yes_bid + yes_ask) / 2 if yes_bid and yes_ask else 0.5
         no_price = (no_bid + no_ask) / 2 if no_bid and no_ask else 0.5
 
-        # Implied probability (from YES price)
+        # Implied probability (from Kalshi YES price - what market thinks)
         implied_probability = yes_price
 
         # Get expiry time
@@ -332,14 +397,29 @@ class MarketService:
         if time_to_expiry_hours < 0:
             return None
 
-        # Model prediction (for now, just use implied probability as baseline)
-        features = {
-            "implied_probability": implied_probability,
-            "strike_price": strike_price,
-            "current_price": current_btc_price,
-            "time_to_expiry_hours": time_to_expiry_hours,
-        }
-        model_probability = self.predictor.predict_probability(features)
+        # Calculate THEORETICAL probability using Black-Scholes with DVOL
+        # This is the TRUE probability based on options market volatility
+        if dvol is not None and dvol > 0:
+            # Use Black-Scholes to get theoretical probability
+            # Kalshi contracts are CALL options (BTC > strike pays YES)
+            theoretical_probability = self.vol_regime.calculate_binary_option_probability(
+                current_price=current_btc_price,
+                strike_price=strike_price,
+                time_to_expiry_hours=time_to_expiry_hours,
+                volatility=dvol,
+                option_type="CALL",
+            )
+            model_probability = theoretical_probability
+        else:
+            # Fallback to old model if DVOL unavailable
+            features = {
+                "implied_probability": implied_probability,
+                "strike_price": strike_price,
+                "current_price": current_btc_price,
+                "time_to_expiry_hours": time_to_expiry_hours,
+            }
+            model_probability = self.predictor.predict_probability(features)
+            theoretical_probability = model_probability
 
         # Calculate expected value for both YES and NO positions
         ev_yes = self.predictor.calculate_expected_value(
@@ -360,10 +440,26 @@ class MarketService:
             signal_type = "HOLD"
             ev = max(ev_yes, ev_no)
 
-        # Calculate edge
-        edge = abs(model_probability - implied_probability)
+        # Calculate MISPRICING: theoretical_probability vs implied_probability
+        # This is the EDGE - how much Kalshi is mis-pricing the contract
+        mispricing = theoretical_probability - implied_probability
+        mispricing_pct = mispricing / implied_probability if implied_probability > 0 else 0
 
-        # Calculate confidence (simplified)
+        # Absolute edge for ranking
+        edge = abs(mispricing)
+
+        # Determine mispricing signal
+        if mispricing > 0.10:  # Theoretical prob 10%+ higher than market
+            mispricing_signal = "KALSHI_UNDERPRICED"  # BUY YES
+            mispricing_opportunity = f"Market prices YES at {implied_probability:.1%}, should be {theoretical_probability:.1%}. BUY YES"
+        elif mispricing < -0.10:  # Theoretical prob 10%+ lower than market
+            mispricing_signal = "KALSHI_OVERPRICED"  # BUY NO
+            mispricing_opportunity = f"Market prices YES at {implied_probability:.1%}, should be {theoretical_probability:.1%}. BUY NO"
+        else:
+            mispricing_signal = "FAIR_PRICED"
+            mispricing_opportunity = None
+
+        # Calculate confidence based on edge size
         confidence = min(0.5 + (edge * 2), 0.95)
 
         return {
@@ -381,17 +477,22 @@ class MarketService:
             "current_btc_price": current_btc_price,
             "yes_price": yes_price,
             "no_price": no_price,
-            "implied_probability": implied_probability,
-            "model_probability": model_probability,
+            "implied_probability": implied_probability,  # What Kalshi market prices
+            "model_probability": model_probability,  # What DVOL+BS calculates
+            "theoretical_probability": theoretical_probability,  # Same as model (for clarity)
+            "mispricing": mispricing,  # Difference (theoretical - implied)
+            "mispricing_pct": mispricing_pct,  # Percentage mispricing
+            "mispricing_signal": mispricing_signal,  # Trading signal
+            "mispricing_opportunity": mispricing_opportunity,  # Human-readable explanation
         }
 
-    def _get_mock_contracts(self, current_btc_price: float) -> list[dict[str, Any]]:
+    def _get_mock_contracts(self, current_btc_price: float) -> dict[str, Any]:
         """Return mock contracts for demo purposes."""
         from datetime import UTC, datetime, timedelta
 
         now = datetime.now(UTC)
 
-        return [
+        contracts = [
             {
                 "id": 1,
                 "ticker": "DEMO-BTC-95K",
@@ -447,6 +548,23 @@ class MarketService:
                 "model_probability": 0.325,
             },
         ]
+
+        # Mock volatility data
+        volatility_data = {
+            "realized_vol": 0.45,
+            "realized_vol_close": 0.45,
+            "realized_vol_parkinson": 0.45,
+            "implied_vol": 0.50,
+            "regime": "NORMAL",
+            "vol_premium": 0.05,
+            "vol_premium_pct": 0.11,
+            "vol_signal": "NEUTRAL",
+        }
+
+        return {
+            "contracts": contracts,
+            "volatility": volatility_data,
+        }
 
     def _extract_strike_price(self, ticker: str, title: str) -> float | None:
         """Extract strike price from ticker or title."""

@@ -25,26 +25,29 @@ class BtcPriceResponse(BaseModel):
 
 
 @router.get("/current")
-async def get_current_signals() -> dict[str, list[SignalResponse]]:
+async def get_current_signals() -> dict:
     """
-    Get current Bitcoin hourly contract signals from Kalshi.
+    Get current Bitcoin hourly contract signals from Kalshi with volatility data.
 
     Fetches real data from Kalshi API (demo or production based on config).
+    Includes volatility regime analysis.
     """
     try:
         print("🔍 Creating MarketService...")
         market_service = MarketService()
         print("✓ MarketService created successfully")
 
-        # Fetch and process Bitcoin hourly contracts
+        # Fetch and process Bitcoin hourly contracts with volatility analysis
         print("🔍 Fetching Bitcoin contracts...")
-        contracts = await market_service.get_bitcoin_hourly_contracts()
-        print(f"✓ Fetched {len(contracts)} contracts")
+        result = await market_service.get_bitcoin_hourly_contracts()
+        print(f"✓ Fetched {len(result.get('contracts', []))} contracts")
 
-        # Convert to SignalResponse format
-        signals = [SignalResponse(**contract) for contract in contracts]
+        # Convert contracts to SignalResponse format
+        signals = [
+            SignalResponse(**contract) for contract in result.get("contracts", [])
+        ]
 
-        return {"contracts": signals}
+        return {"contracts": signals, "volatility": result.get("volatility", {})}
     except Exception as e:
         print(f"✗ ERROR in get_current_signals: {type(e).__name__}: {e}")
         print(f"Traceback:\n{traceback.format_exc()}")
@@ -121,13 +124,17 @@ async def trading_data_stream(request: Request) -> AsyncGenerator:
             # Stream contract updates every 20 seconds
             if current_time - last_contract_update >= 20.0:
                 try:
-                    contracts = await market_service.get_bitcoin_hourly_contracts()
-                    signals = [SignalResponse(**contract) for contract in contracts]
+                    result = await market_service.get_bitcoin_hourly_contracts()
+                    signals = [
+                        SignalResponse(**contract)
+                        for contract in result.get("contracts", [])
+                    ]
 
                     yield {
                         "event": "contracts_update",
                         "data": json.dumps({
                             "contracts": [s.model_dump() for s in signals],
+                            "volatility": result.get("volatility", {}),
                             "timestamp": datetime.now(UTC).isoformat()
                         })
                     }

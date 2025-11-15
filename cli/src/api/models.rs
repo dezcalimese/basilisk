@@ -28,9 +28,27 @@ pub struct Contract {
     pub model_probability: Option<f64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct VolatilityData {
+    #[serde(default)]
+    pub realized_vol: f64,
+    #[serde(default)]
+    pub implied_vol: f64,
+    #[serde(default)]
+    pub regime: String,
+    #[serde(default)]
+    pub vol_premium: f64,
+    #[serde(default)]
+    pub vol_premium_pct: f64,
+    #[serde(default)]
+    pub vol_signal: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CurrentResponse {
     pub contracts: Vec<Contract>,
+    #[serde(default)]
+    pub volatility: VolatilityData,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

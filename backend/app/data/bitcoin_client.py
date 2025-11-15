@@ -1,5 +1,6 @@
 """Bitcoin price data client."""
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -8,11 +9,13 @@ from app.core.config import settings
 
 
 class BitcoinPriceClient:
-    """Client for fetching Bitcoin spot prices."""
+    """Client for fetching Bitcoin spot prices and historical data."""
 
     def __init__(self) -> None:
         """Initialize Bitcoin price client."""
         self.api_url = settings.bitcoin_price_api_url
+        # Use Binance.US for US-based requests (Binance.com geo-blocks US traffic)
+        self.candles_url = "https://api.binance.us/api/v3/klines"
 
     async def get_spot_price(self) -> float:
         """
@@ -29,3 +32,69 @@ class BitcoinPriceClient:
             # Coinbase API format: {"data": {"amount": "67890.12"}}
             price_str = data["data"]["amount"]
             return float(price_str)
+
+    async def get_historical_candles(
+        self,
+        hours: int = 168,  # Default 1 week
+        granularity: int = 3600,  # 1 hour in seconds (kept for API compatibility)
+    ) -> list[dict[str, Any]]:
+        """
+        Fetch historical OHLCV candles from Binance.
+
+        Args:
+            hours: Number of hours of history to fetch (max 1000 due to Binance limit)
+            granularity: Candle size in seconds (3600 = 1 hour, kept for compatibility)
+
+        Returns:
+            List of candles in format:
+            [
+                {
+                    "timestamp": datetime,
+                    "open": float,
+                    "high": float,
+                    "low": float,
+                    "close": float,
+                    "volume": float
+                },
+                ...
+            ]
+        """
+        # Binance API returns max 1000 candles per request
+        # For hourly candles, that's 1000 hours (~41 days)
+        max_hours = min(hours, 1000)
+
+        params = {
+            "symbol": "BTCUSDT",  # BTC/USDT pair
+            "interval": "1h",  # 1 hour candles
+            "limit": max_hours,  # Number of candles to return
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                self.candles_url, params=params, timeout=10.0
+            )
+            response.raise_for_status()
+            raw_candles: list[list[Any]] = response.json()
+
+            # Binance format: [timestamp_ms, open, high, low, close, volume, ...]
+            # Convert to more readable dict format
+            candles = []
+            for candle in raw_candles:
+                candles.append(
+                    {
+                        "timestamp": datetime.fromtimestamp(
+                            int(candle[0]) / 1000, tz=UTC
+                        ),
+                        "open": float(candle[1]),
+                        "high": float(candle[2]),
+                        "low": float(candle[3]),
+                        "close": float(candle[4]),
+                        "volume": float(candle[5]),
+                    }
+                )
+
+            # Binance returns data in ascending order (oldest to newest)
+            # No need to sort, but keeping for consistency
+            candles.sort(key=lambda x: x["timestamp"])
+
+            return candles

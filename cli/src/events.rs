@@ -1,4 +1,4 @@
-use crate::api::Contract;
+use crate::api::{Contract, VolatilityData};
 use crossterm::event::KeyCode;
 
 /// Unified event type for all app events (keyboard, SSE, timers)
@@ -17,7 +17,11 @@ pub enum AppEvent {
     BtcPriceUpdate { price: f64, timestamp: String },
 
     /// Full contracts update from SSE
-    ContractsUpdate { contracts: Vec<Contract>, timestamp: String },
+    ContractsUpdate {
+        contracts: Vec<Contract>,
+        volatility: VolatilityData,
+        timestamp: String,
+    },
 
     /// SSE error occurred
     SseError(String),

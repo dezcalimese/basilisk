@@ -112,9 +112,9 @@ function parseTickerInfo(ticker: string, expiryTime?: string) {
 export function SignalList({ signals, currentTime }: SignalListProps) {
   if (signals.length === 0) {
     return (
-      <div className="glass-table p-6">
-        <h2 className="text-xl font-bold mb-4">Active Signals</h2>
-        <p className="text-muted-foreground text-center py-8">
+      <div className="glass-table p-4 h-full flex flex-col">
+        <h2 className="text-lg font-bold mb-3">Active Signals</h2>
+        <p className="text-muted-foreground text-center py-8 text-sm">
           No active signals at the moment
         </p>
       </div>
@@ -122,9 +122,9 @@ export function SignalList({ signals, currentTime }: SignalListProps) {
   }
 
   return (
-    <div className="glass-table p-6">
-      <h2 className="text-xl font-bold mb-6">Active Signals</h2>
-      <div className="space-y-4">
+    <div className="glass-table p-4 h-full flex flex-col">
+      <h2 className="text-lg font-bold mb-3">Active Signals</h2>
+      <div className="space-y-3 overflow-y-auto flex-1 pr-2" style={{ maxHeight: "calc(100vh - 300px)" }}>
         {signals.map((signal) => (
           <SignalRow
             key={signal.id}
@@ -155,11 +155,11 @@ function SignalRow({ signal, currentTime }: SignalRowProps) {
   const evIsPositive = animatedEv >= 0;
 
   return (
-    <div className="flex items-start justify-between p-4 rounded-xl border border-border/50 hover:border-border transition-all duration-300 hover:shadow-lg backdrop-blur-sm">
-      <div className="flex-1">
+    <div className="flex items-start justify-between p-3 rounded-lg border border-border/50 hover:border-border transition-all duration-200 hover:shadow-md backdrop-blur-sm">
+      <div className="flex-1 min-w-0">
         {/* Readable expiry date/time */}
         <div className="flex items-center gap-2 mb-1">
-          <h3 className="text-lg font-bold">
+          <h3 className="text-sm font-bold truncate">
             {tickerInfo.date} @ {tickerInfo.time}
           </h3>
           <Badge
@@ -170,32 +170,33 @@ function SignalRow({ signal, currentTime }: SignalRowProps) {
                 ? "secondary"
                 : "outline"
             }
+            className="text-xs py-0 px-1.5"
           >
             {signal.signal_type}
           </Badge>
         </div>
 
         {/* Strike price */}
-        <div className="text-base font-semibold text-muted-foreground mb-2">
+        <div className="text-xs font-semibold text-muted-foreground mb-1">
           Strike: {signal.strike_price ? `$${signal.strike_price.toLocaleString()}` : tickerInfo.strike}
           {signal.current_btc_price && (
-            <span className="ml-2 text-sm font-normal">
+            <span className="ml-1 text-xs font-normal">
               (BTC: ${signal.current_btc_price.toLocaleString()})
             </span>
           )}
         </div>
 
         {/* Ticker reference */}
-        <div className="text-xs text-muted-foreground mb-2 font-mono">
+        <div className="text-xs text-muted-foreground mb-1 font-mono truncate">
           {signal.ticker}
         </div>
 
         {/* Trading details */}
-        <div className="text-sm text-muted-foreground space-y-1">
+        <div className="text-xs text-muted-foreground space-y-0.5">
           <div>
             Recommended entry: ${signal.recommended_price.toFixed(2)}
             {timeRemainingLabel && (
-              <span className="ml-2">• {timeRemainingLabel} to expiry</span>
+              <span className="ml-1">• {timeRemainingLabel} to expiry</span>
             )}
           </div>
           {signal.yes_price !== undefined && signal.no_price !== undefined && (
@@ -207,23 +208,23 @@ function SignalRow({ signal, currentTime }: SignalRowProps) {
       </div>
 
       {/* Stats column */}
-      <div className="text-right ml-4">
+      <div className="text-right ml-3 flex-shrink-0">
         <div
-          className={`text-xl font-bold ${
+          className={`text-lg font-bold ${
             evIsPositive ? "text-green-600" : "text-red-600"
           }`}
         >
           {evIsPositive ? "+" : ""}
           {(animatedEv * 100).toFixed(1)}% EV
         </div>
-        <div className="text-sm text-muted-foreground mt-1">
+        <div className="text-xs text-muted-foreground mt-0.5">
           {(signal.edge_percentage * 100).toFixed(1)}% edge
         </div>
-        <div className="text-xs text-muted-foreground mt-1">
+        <div className="text-xs text-muted-foreground mt-0.5">
           {(signal.confidence_score * 100).toFixed(0)}% confidence
         </div>
         {signal.model_probability !== undefined && (
-          <div className="text-xs text-muted-foreground mt-1">
+          <div className="text-xs text-muted-foreground mt-0.5">
             Model: {(signal.model_probability * 100).toFixed(1)}%
           </div>
         )}

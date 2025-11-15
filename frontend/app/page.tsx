@@ -7,6 +7,7 @@ import { SignalList } from "@/components/dashboard/signal-list";
 import { AnimatedPrice } from "@/components/dashboard/animated-price";
 import { HelpDialog } from "@/components/help-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { VolatilitySurface } from "@/components/dashboard/volatility-surface";
 
 const SIGNAL_REFRESH_INTERVAL_MS = 5_000;
 const BTC_PRICE_REFRESH_INTERVAL_MS = 5_000;
@@ -108,11 +109,11 @@ export default function Home() {
     <div className="min-h-screen">
       {/* Header */}
       <header className="glass-header sticky top-0 z-40">
-        <div className="container mx-auto px-4 py-6">
+        <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold">Basilisk</h1>
-              <p className="text-muted-foreground mt-1">See the true odds</p>
+              <h1 className="text-2xl font-bold">Basilisk</h1>
+              <p className="text-muted-foreground text-sm">See the true odds</p>
             </div>
             <div className="flex items-center gap-4">
               <ThemeToggle />
@@ -138,7 +139,7 @@ export default function Home() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-4">
         {initialLoading && (
           <div className="text-center py-12">
             <p className="text-muted-foreground">Loading signals...</p>
@@ -158,7 +159,7 @@ export default function Home() {
         {!initialLoading && (
           <>
             {/* Metrics Row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <MetricCard
                 title="Active Signals"
                 value={activeSignalsCount}
@@ -176,15 +177,28 @@ export default function Home() {
               />
             </div>
 
-            {/* Signals List */}
-            <SignalList signals={signals} currentTime={currentTime} />
+            {/* Main Grid: Volatility Surface (2/3) + Active Signals List (1/3) */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Volatility Surface - 2/3 width */}
+              <div className="lg:col-span-2">
+                <VolatilitySurface
+                  signals={signals}
+                  currentBtcPrice={currentBtcPrice}
+                />
+              </div>
+
+              {/* Active Signals List - 1/3 width */}
+              <div className="lg:col-span-1">
+                <SignalList signals={signals} currentTime={currentTime} />
+              </div>
+            </div>
           </>
         )}
       </main>
 
       {/* Footer */}
-      <footer className="glass-footer mt-12">
-        <div className="container mx-auto px-4 py-6">
+      <footer className="glass-footer mt-6">
+        <div className="container mx-auto px-4 py-3">
           <p className="text-center text-sm text-muted-foreground">
             Basilisk • Probabilistic trading analytics for Kalshi markets
           </p>
