@@ -1,0 +1,22 @@
+# Requirements for Bitcoin Volatility Regime Detection
+# Install with: pip install -r requirements_volatility.txt
+
+# Core dependencies
+ccxt>=4.0.0
+pandas>=2.0.0
+numpy>=1.24.0
+requests>=2.31.0
+
+# Optional: For data persistence
+# sqlite3  # Built-in to Python
+
+# Optional: For advanced analysis
+# matplotlib>=3.7.0  # For plotting volatility surfaces
+# seaborn>=0.12.0    # For visualization
+# scipy>=1.10.0      # For statistical analysis
+
+# Optional: Environment variable management
+# python-dotenv>=1.0.0
+
+# Optional: Premium data provider (requires API key)
+# amberdata-derivatives  # For Amberdata API access

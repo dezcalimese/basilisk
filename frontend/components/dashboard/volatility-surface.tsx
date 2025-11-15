@@ -35,6 +35,9 @@ export function VolatilitySurface({
   signals,
   currentBtcPrice,
 }: VolatilitySurfaceProps) {
+  // IMPORTANT: All hooks must be called BEFORE any conditional returns
+  const [showInfo, setShowInfo] = useState(false);
+
   // Transform signals into surface data points
   const surfaceData = useMemo(() => {
     return signals
@@ -132,7 +135,7 @@ export function VolatilitySurface({
 
   if (surfaceData.length === 0) {
     return (
-      <div className="glass-card p-6">
+      <div className="glass-card p-6 h-full flex flex-col">
         <h3 className="text-lg font-semibold mb-4">Volatility Surface</h3>
         <p className="text-sm text-muted-foreground text-center py-8">
           No data available for volatility surface
@@ -141,10 +144,8 @@ export function VolatilitySurface({
     );
   }
 
-  const [showInfo, setShowInfo] = useState(false);
-
   return (
-    <div className="glass-card p-4">
+    <div className="glass-card p-4 h-full flex flex-col">
       <div className="mb-3">
         <div className="flex items-center gap-2">
           <h3 className="text-lg font-semibold">Volatility Surface</h3>

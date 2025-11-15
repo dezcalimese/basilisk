@@ -150,6 +150,7 @@ impl App {
         }
     }
 
+    #[allow(dead_code)]
     async fn fetch_btc_price(&mut self) {
         // Lightweight BTC price update (doesn't change connection state)
         match self.api_client.get_btc_price().await {
@@ -714,7 +715,7 @@ impl App {
                                 ) {
                                     tx.send(AppEvent::BtcPriceUpdate {
                                         price,
-                                        timestamp: timestamp.to_string(),
+                                        _timestamp: timestamp.to_string(),
                                     }).ok();
                                 }
                             }
@@ -734,7 +735,7 @@ impl App {
                                         tx.send(AppEvent::ContractsUpdate {
                                             contracts,
                                             volatility,
-                                            timestamp: timestamp.to_string(),
+                                            _timestamp: timestamp.to_string(),
                                         }).ok();
                                     }
                                 }
@@ -792,7 +793,7 @@ impl App {
                 self.connection_state = ConnectionState::Disconnected;
                 self.error_message = Some(format!("SSE Error: {}", err));
             }
-            AppEvent::Keyboard(key) => {
+            AppEvent::Keyboard(_key) => {
                 // Handle in main loop
             }
             AppEvent::Tick | AppEvent::Quit => {

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SSE Test</title>
+</head>
+<body>
+    <h1>SSE Connection Test</h1>
+    <div id="status">Connecting...</div>
+    <div id="events"></div>
+
+    <script>
+        const statusEl = document.getElementById('status');
+        const eventsEl = document.getElementById('events');
+
+        function log(message) {
+            const time = new Date().toLocaleTimeString();
+            eventsEl.innerHTML = `[${time}] ${message}<br>` + eventsEl.innerHTML;
+            console.log(message);
+        }
+
+        // Test SSE connection
+        const es = new EventSource('http://localhost:8000/api/v1/stream/trading');
+
+        es.onopen = () => {
+            statusEl.textContent = 'Connected ✓';
+            statusEl.style.color = 'green';
+            log('Connection opened');
+        };
+
+        es.onerror = (error) => {
+            statusEl.textContent = 'Error ✗';
+            statusEl.style.color = 'red';
+            log('Error: ' + JSON.stringify(error));
+        };
+
+        es.addEventListener('connected', (event) => {
+            log('Event: connected - ' + event.data);
+        });
+
+        es.addEventListener('btc_price', (event) => {
+            const data = JSON.parse(event.data);
+            log('BTC Price: $' + data.price.toLocaleString());
+        });
+
+        es.addEventListener('contracts_update', (event) => {
+            const data = JSON.parse(event.data);
+            log('Contracts update: ' + data.contracts.length + ' contracts');
+        });
+
+        // Cleanup after 60 seconds
+        setTimeout(() => {
+            es.close();
+            log('Test complete - connection closed');
+        }, 60000);
+    </script>
+</body>
+</html>
