@@ -22,6 +22,15 @@ export interface TradeSignal {
   no_price?: number;
   implied_probability?: number;
   model_probability?: number;
+  // Greeks (Black-Scholes sensitivity metrics)
+  greeks?: {
+    price: number;      // Theoretical fair value (0-1)
+    delta: number;      // Price sensitivity to spot move
+    gamma: number;      // Rate of delta change
+    vega: number;       // Volatility sensitivity
+    theta: number;      // Time decay per day
+    rho: number;        // Interest rate sensitivity
+  };
 }
 
 export interface HealthResponse {

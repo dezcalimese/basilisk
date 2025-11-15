@@ -9,7 +9,10 @@ import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAnimatedNumber } from "@/hooks/use-animated-number";
+import { useRealtimeStore } from "@/lib/stores/realtime-store";
+import { useAnalyticalStore } from "@/lib/stores/analytical-store";
 import type { TradeSignal } from "@/lib/api";
+import { GreeksProfile, calculateGreeksForSignal } from "@/components/dashboard/greeks-profile";
 
 interface SignalListProps {
   signals: TradeSignal[];
@@ -148,9 +151,19 @@ function SignalRow({ signal, currentTime }: SignalRowProps) {
   const animatedYes = useAnimatedNumber(signal.yes_price ?? 0, 500);
   const animatedNo = useAnimatedNumber(signal.no_price ?? 0, 500);
 
+  // Get current BTC price and volatility for Greeks calculation
+  const currentBtcPrice = useRealtimeStore((state) => state.currentPrice);
+  const volatility = useAnalyticalStore((state) => state.volatility);
+
   const timeRemainingLabel = useMemo(() => {
     return formatTimeRemaining(currentTime, signal.expiry_time, signal.time_to_expiry_hours);
   }, [currentTime, signal.expiry_time, signal.time_to_expiry_hours]);
+
+  // Calculate Greeks if not provided by backend
+  const signalWithGreeks = useMemo(() => {
+    if (signal.greeks || !volatility) return signal;
+    return calculateGreeksForSignal(signal, currentBtcPrice, volatility.implied_vol);
+  }, [signal, currentBtcPrice, volatility]);
 
   const evIsPositive = animatedEv >= 0;
 
@@ -205,6 +218,9 @@ function SignalRow({ signal, currentTime }: SignalRowProps) {
             </div>
           )}
         </div>
+
+        {/* Greeks Profile */}
+        <GreeksProfile signal={signalWithGreeks} compact />
       </div>
 
       {/* Stats column */}
