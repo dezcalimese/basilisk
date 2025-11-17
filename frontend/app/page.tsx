@@ -76,7 +76,7 @@ export default function Home() {
             <div className="flex items-center gap-3">
               <div>
                 <h1 className="text-2xl font-bold">Basilisk</h1>
-                <p className="text-muted-foreground text-sm">See the true odds</p>
+                <p className="text-muted-foreground text-sm">A serpent's eye for mispriced markets</p>
               </div>
               <ConnectionStatus showLabel={true} showError={false} />
             </div>

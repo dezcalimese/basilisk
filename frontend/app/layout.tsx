@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Basilisk - Trading Analytics",
-  description: "See the true odds with Basilisk",
+  description: "A serpent's eye for mispriced markets",
 };
 
 export default function RootLayout({

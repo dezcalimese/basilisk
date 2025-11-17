@@ -1,6 +1,6 @@
 # Basilisk 🐍
 
-> *"See the true odds"*
+> *"A serpent's eye for mispriced markets."*
 
 Basilisk is a single-user trading analytics dashboard for Kalshi digital options contracts. Named after the mythological creature whose gaze could see through to the truth, Basilisk reveals the true probabilities hidden in market prices.
 
@@ -183,20 +183,27 @@ bun run lint
 - ✅ Backend API with FastAPI
 - ✅ Database models for contracts, prices, predictions
 - ✅ Frontend dashboard with Next.js
-- ✅ Real-time signal display
-- ✅ Metric cards for key statistics
+- ✅ **Real-time Data Streaming** - Server-Sent Events (SSE) for live updates
+- ✅ **Multi-Exchange Integration** - Kraken API and Binance WebSocket support
+- ✅ **Real-time Candlestick Charts** - Live price visualization with WebSocket feeds
+- ✅ **Binary Options Greeks** - Delta, Gamma, Vega, Theta, Rho calculations
+- ✅ **3D Volatility Surface** - Interactive interpolated volatility visualization
+- ✅ **Volatility Analysis** - Realized vs Implied volatility tracking with regime detection
+- ✅ **Probability Ladder** - Visual representation of probability distributions
+- ✅ **Real-time Signal Display** - Live trade opportunities with EV calculations
+- ✅ **Metric Cards** - Key statistics with live updates
+- ✅ **Connection Monitoring** - Real-time connection status indicators
+- ✅ **Comprehensive Test Suite** - Vitest testing for indicators, stores, and API clients
 - ✅ Modern UI with shadcn/ui components
 
 ### Planned
 - ⏳ Kalshi API integration
-- ⏳ Bitcoin price ingestion
 - ⏳ Probabilistic model implementation
-- ⏳ Expected value calculation
 - ⏳ Scheduled data fetching (hourly)
-- ⏳ Historical charts (implied vs true probability)
 - ⏳ Browser notifications for high-EV signals
 - ⏳ Trade simulation/backtesting
 - ⏳ Model calibration metrics
+- ⏳ Advanced order execution
 
 ## Configuration
 
