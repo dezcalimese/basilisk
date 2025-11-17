@@ -38,14 +38,14 @@ impl SignalsView {
         let rows: Vec<Row> = contracts
             .iter()
             .map(|contract| {
-                let ev_color = get_ev_color(contract.expected_value);
-                let dist_color = if contract.is_above_strike() {
+                let _ev_color = get_ev_color(contract.expected_value);
+                let _dist_color = if contract.is_above_strike() {
                     Color::Green
                 } else {
                     Color::Red
                 };
 
-                let time_left_color = if contract.is_near_expiry() {
+                let _time_left_color = if contract.is_near_expiry() {
                     Color::LightRed
                 } else {
                     Color::White

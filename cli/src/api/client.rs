@@ -19,6 +19,7 @@ impl ApiClient {
         Ok(Self { client, base_url })
     }
 
+    #[allow(dead_code)]
     pub async fn health_check(&self) -> Result<HealthResponse> {
         let url = format!("{}/api/v1/health", self.base_url);
         let response = self
@@ -53,6 +54,7 @@ impl ApiClient {
         Ok(current)
     }
 
+    #[allow(dead_code)]
     pub async fn get_btc_price(&self) -> Result<BtcPriceResponse> {
         let url = format!("{}/api/v1/btc-price", self.base_url);
         let response = self

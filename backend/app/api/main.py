@@ -6,7 +6,7 @@ from typing import AsyncGenerator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import current, health, signals
+from app.api.routes import candles, current, health, signals
 from app.core.config import settings
 from app.db.database import init_db
 
@@ -41,6 +41,7 @@ app.add_middleware(
 app.include_router(health.router, prefix=settings.api_v1_prefix, tags=["health"])
 app.include_router(signals.router, prefix=settings.api_v1_prefix, tags=["signals"])
 app.include_router(current.router, prefix=settings.api_v1_prefix, tags=["current"])
+app.include_router(candles.router, prefix=settings.api_v1_prefix, tags=["candles"])
 
 
 @app.get("/")

@@ -3,6 +3,7 @@ use crossterm::event::KeyCode;
 
 /// Unified event type for all app events (keyboard, SSE, timers)
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum AppEvent {
     /// Keyboard input event
     Keyboard(KeyCode),
@@ -14,13 +15,13 @@ pub enum AppEvent {
     SseDisconnected,
 
     /// BTC price update from SSE
-    BtcPriceUpdate { price: f64, timestamp: String },
+    BtcPriceUpdate { price: f64, _timestamp: String },
 
     /// Full contracts update from SSE
     ContractsUpdate {
         contracts: Vec<Contract>,
         volatility: VolatilityData,
-        timestamp: String,
+        _timestamp: String,
     },
 
     /// SSE error occurred
