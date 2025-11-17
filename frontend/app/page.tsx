@@ -6,7 +6,7 @@ import { SignalList } from "@/components/dashboard/signal-list";
 import { AnimatedPrice } from "@/components/dashboard/animated-price";
 import { HelpDialog } from "@/components/help-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { VolatilitySurface } from "@/components/dashboard/volatility-surface";
+import { VolatilitySurface3D } from "@/components/dashboard/volatility-surface-3d";
 import { PriceChart } from "@/components/dashboard/price-chart";
 import { ConnectionStatus } from "@/components/connection-status";
 import { useRealtimeData } from "@/hooks/use-realtime-data";
@@ -175,7 +175,7 @@ export default function Home() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
               {/* Volatility Surface - 2/3 width */}
               <div className="lg:col-span-2 h-full">
-                <VolatilitySurface
+                <VolatilitySurface3D
                   signals={signals}
                   currentBtcPrice={currentBtcPrice > 0 ? currentBtcPrice : null}
                 />
