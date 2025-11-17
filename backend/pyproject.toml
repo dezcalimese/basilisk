@@ -1,7 +1,7 @@
 [project]
 name = "basilisk"
 version = "0.1.0"
-description = "Kalshi digital options trading analytics dashboard - See the true odds"
+description = "Kalshi digital options trading analytics dashboard - A serpent's eye for mispriced markets"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -15,6 +15,7 @@ dependencies = [
     "httpx>=0.27.0",
     "pandas>=2.2.0",
     "numpy>=2.1.0",
+    "scipy>=1.11.0",
     "scikit-learn>=1.5.0",
     "python-dotenv>=1.0.0",
     "alembic>=1.13.0",
