@@ -28,13 +28,11 @@ export function GreeksProfile({ signal, compact = false }: GreeksProfileProps) {
   // Compact view for inline display in SignalList
   if (compact) {
     return (
-      <div className="text-xs space-y-1 mt-2 border-t border-border/30 pt-2">
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Greeks:</span>
-        </div>
+      <div className="text-xs mt-2 border-t border-border/30 pt-2">
+        <div className="text-muted-foreground mb-1.5">Greeks:</div>
         <div className="grid grid-cols-2 gap-x-3 gap-y-1">
           <GreekItem
-            label="Δ"
+            label="Delta (Δ)"
             value={delta}
             format={(v) => v.toFixed(4)}
             tooltip={getGreekInterpretation("delta")}
@@ -42,7 +40,7 @@ export function GreeksProfile({ signal, compact = false }: GreeksProfileProps) {
             onShowTooltip={() => setShowTooltip(showTooltip === "delta" ? null : "delta")}
           />
           <GreekItem
-            label="Γ"
+            label="Gamma (Γ)"
             value={gamma}
             format={(v) => v.toFixed(6)}
             tooltip={getGreekInterpretation("gamma")}
@@ -50,7 +48,7 @@ export function GreeksProfile({ signal, compact = false }: GreeksProfileProps) {
             onShowTooltip={() => setShowTooltip(showTooltip === "gamma" ? null : "gamma")}
           />
           <GreekItem
-            label="ν"
+            label="Vega (ν)"
             value={vega}
             format={(v) => v.toFixed(4)}
             tooltip={getGreekInterpretation("vega")}
@@ -58,7 +56,7 @@ export function GreeksProfile({ signal, compact = false }: GreeksProfileProps) {
             onShowTooltip={() => setShowTooltip(showTooltip === "vega" ? null : "vega")}
           />
           <GreekItem
-            label="Θ"
+            label="Theta (Θ)"
             value={theta}
             format={(v) => v.toFixed(4)}
             tooltip={getGreekInterpretation("theta")}
@@ -142,20 +140,28 @@ function GreekItem({
     : "text-foreground";
 
   return (
-    <div className="relative">
+    <div className="relative group">
       <button
         onClick={onShowTooltip}
-        className="flex items-center justify-between w-full hover:bg-muted/30 rounded px-1 py-0.5 transition-colors"
+        className="flex items-center justify-between w-full hover:bg-muted/30 rounded px-1 py-0.5 transition-colors text-left"
       >
-        <span className="text-muted-foreground font-medium">{label}:</span>
-        <span className={`font-mono ${valueColor}`}>
+        <span className="text-muted-foreground text-xs whitespace-nowrap">{label}:</span>
+        <span className={`font-mono text-xs ${valueColor} ml-1`}>
           {value > 0 && !colorize ? "+" : ""}
           {format(value)}
         </span>
       </button>
       {showTooltip && (
-        <div className="absolute z-10 left-0 top-full mt-1 w-48 bg-background/95 backdrop-blur-sm border border-border rounded-lg p-2 shadow-lg text-xs">
-          {tooltip}
+        <div className="fixed z-50 w-56 bg-background/95 backdrop-blur-sm border border-border rounded-lg p-3 shadow-xl text-xs"
+             style={{
+               top: '50%',
+               left: '50%',
+               transform: 'translate(-50%, -50%)'
+             }}>
+          <div className="space-y-1">
+            <p className="font-semibold text-foreground mb-1">{label.split(' ')[0]}</p>
+            <p className="text-muted-foreground">{tooltip}</p>
+          </div>
         </div>
       )}
     </div>

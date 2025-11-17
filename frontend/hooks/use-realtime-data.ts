@@ -1,16 +1,16 @@
 import { useEffect } from 'react';
 import sseManager from '@/lib/sse-manager';
-import krakenAPI from '@/lib/kraken-api';
+import exchangeAPI from '@/lib/exchange-api';
 
 /**
- * React hook for consuming real-time trading data via SSE and Kraken REST API
+ * React hook for consuming real-time trading data via SSE and Exchange REST API
  *
  * Uses global managers that persist across React re-renders
  * to prevent hot-reload from breaking connections in development.
  *
- * Note: Switched from Binance WebSocket to Kraken REST API due to
- * browser WebSocket blocking. Kraken's public REST API is CORS-friendly
- * and works reliably from all browsers.
+ * Note: Uses multi-exchange data via backend proxy with automatic fallback.
+ * Backend uses CCXT to try multiple exchanges (Kraken, Coinbase, etc.)
+ * Falls back to CoinGecko if all exchanges fail.
  *
  * Usage:
  * ```tsx
@@ -56,9 +56,9 @@ export function useRealtimeData(options: UseRealtimeDataOptions = {}) {
     console.log('[useRealtimeData] Requesting SSE connection');
     sseManager.connect(url);
 
-    // Start Kraken API polling for candles (CORS-friendly REST API)
-    console.log('[useRealtimeData] Starting Kraken API polling');
-    krakenAPI.startPolling();
+    // Start Exchange API polling for candles (via backend proxy)
+    console.log('[useRealtimeData] Starting Exchange API polling via backend');
+    exchangeAPI.startPolling();
 
     // Don't disconnect on cleanup - let the managers persist
     // This prevents hot-reload from breaking the connection
@@ -77,14 +77,14 @@ export function useRealtimeData(options: UseRealtimeDataOptions = {}) {
       const url = `${baseUrl}/api/v1/stream/trading`;
       sseManager.disconnect();
       sseManager.connect(url);
-      krakenAPI.stopPolling();
-      krakenAPI.startPolling();
+      exchangeAPI.stopPolling();
+      exchangeAPI.startPolling();
     },
 
     /**
      * Check if currently connected
      */
-    isConnected: () => sseManager.isConnected() && krakenAPI.getIsPolling(),
+    isConnected: () => sseManager.isConnected() && exchangeAPI.getIsPolling(),
 
     /**
      * Get current connection state
@@ -96,7 +96,7 @@ export function useRealtimeData(options: UseRealtimeDataOptions = {}) {
      */
     disconnect: () => {
       sseManager.disconnect();
-      krakenAPI.stopPolling();
+      exchangeAPI.stopPolling();
     },
   };
 }

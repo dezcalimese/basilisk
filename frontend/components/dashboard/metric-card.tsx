@@ -24,19 +24,17 @@ export function MetricCard({
   };
 
   return (
-    <div className="glass-metric liquid-gradient rounded-2xl p-4">
-      <div className="relative z-10">
-        <h3 className="text-xs font-medium text-muted-foreground mb-1">
-          {title}
-        </h3>
-        <div className="text-2xl font-bold">{value}</div>
-        {description && (
-          <p className="text-xs text-muted-foreground mt-1">{description}</p>
-        )}
-        {trend && trendValue && (
-          <p className={`text-xs mt-1 ${trendColor[trend]}`}>{trendValue}</p>
-        )}
-      </div>
+    <div className="glass-metric rounded-2xl p-4">
+      <h3 className="text-xs font-medium text-muted-foreground mb-1">
+        {title}
+      </h3>
+      <div className="text-2xl font-bold">{value}</div>
+      {description && (
+        <p className="text-xs text-muted-foreground mt-1">{description}</p>
+      )}
+      {trend && trendValue && (
+        <p className={`text-xs mt-1 ${trendColor[trend]}`}>{trendValue}</p>
+      )}
     </div>
   );
 }
