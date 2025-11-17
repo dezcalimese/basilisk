@@ -57,6 +57,31 @@ pub struct HealthResponse {
     pub service: String,
 }
 
+/// Hourly price movement statistics
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct HourlyStats {
+    pub mean_return: f64,
+    pub std_return: f64,
+    pub median_return: f64,
+    pub percentile_5: f64,
+    pub percentile_25: f64,
+    pub percentile_50: f64,
+    pub percentile_75: f64,
+    pub percentile_95: f64,
+    pub max_hourly_move: f64,
+    pub total_samples: i64,
+}
+
+/// Volatility skew data
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct VolatilitySkew {
+    pub atm_iv: f64,
+    pub otm_call_iv: f64,
+    pub otm_put_iv: f64,
+    pub skew: f64,
+    pub skew_interpretation: String,
+}
+
 impl Contract {
     /// Calculate distance from current BTC price to strike price
     pub fn distance_dollars(&self) -> f64 {

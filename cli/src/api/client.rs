@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use reqwest::Client;
 use std::time::Duration;
 
-use super::models::{BtcPriceResponse, CurrentResponse, HealthResponse};
+use super::models::{BtcPriceResponse, CurrentResponse, HealthResponse, HourlyStats, VolatilitySkew};
 
 pub struct ApiClient {
     client: Client,
@@ -70,5 +70,39 @@ impl ApiClient {
             .context("Failed to parse BTC price response")?;
 
         Ok(price)
+    }
+
+    pub async fn get_hourly_stats(&self) -> Result<HourlyStats> {
+        let url = format!("{}/api/v1/statistics/hourly-movements?hours=720", self.base_url);
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .context("Failed to send hourly stats request")?;
+
+        let stats = response
+            .json::<HourlyStats>()
+            .await
+            .context("Failed to parse hourly stats response")?;
+
+        Ok(stats)
+    }
+
+    pub async fn get_volatility_skew(&self) -> Result<VolatilitySkew> {
+        let url = format!("{}/api/v1/volatility/skew", self.base_url);
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .context("Failed to send volatility skew request")?;
+
+        let skew = response
+            .json::<VolatilitySkew>()
+            .await
+            .context("Failed to parse volatility skew response")?;
+
+        Ok(skew)
     }
 }

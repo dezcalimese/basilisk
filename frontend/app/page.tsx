@@ -9,6 +9,8 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { VolatilitySurface3D } from "@/components/dashboard/volatility-surface-3d";
 import { PriceChart } from "@/components/dashboard/price-chart";
 import { ConnectionStatus } from "@/components/connection-status";
+import { HourlyStatsWidget } from "@/components/dashboard/hourly-stats-widget";
+import { VolatilitySkewChart } from "@/components/dashboard/volatility-skew-chart";
 import { useRealtimeData } from "@/hooks/use-realtime-data";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { useAnalyticalStore } from "@/lib/stores/analytical-store";
@@ -169,6 +171,12 @@ export default function Home() {
             {/* Price Chart - Full Width */}
             <div className="mb-4">
               <PriceChart signals={signals} height={400} />
+            </div>
+
+            {/* NEW WIDGETS: Hourly Stats + Volatility Skew */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+              <HourlyStatsWidget />
+              <VolatilitySkewChart />
             </div>
 
             {/* Main Grid: Volatility Surface (2/3) + Active Signals List (1/3) */}

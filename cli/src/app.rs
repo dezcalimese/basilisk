@@ -12,9 +12,9 @@ use ratatui::{
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
-use crate::api::{ApiClient, Contract, VolatilityData};
+use crate::api::{ApiClient, Contract, VolatilityData, HourlyStats, VolatilitySkew};
 use crate::events::AppEvent;
-use crate::ui::SignalsView;
+use crate::ui::{SignalsView, HourlyStatsView, VolSkewView};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionState {
@@ -23,10 +23,20 @@ pub enum ConnectionState {
     Connecting,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViewMode {
+    Signals,
+    HourlyStats,
+    VolSkew,
+}
+
 pub struct App {
     api_client: ApiClient,
     api_url: String,
+    view_mode: ViewMode,
     signals_view: SignalsView,
+    hourly_stats_view: HourlyStatsView,
+    vol_skew_view: VolSkewView,
     contracts: Vec<Contract>,
     current_btc_price: f64,
     connection_state: ConnectionState,
@@ -37,6 +47,8 @@ pub struct App {
     show_help: bool,
     help_scroll: u16,
     volatility_data: VolatilityData,
+    hourly_stats: HourlyStats,
+    vol_skew: VolatilitySkew,
     // Sparkline data (last 50 data points for visualization)
     btc_price_history: Vec<u64>,        // BTC price history for sparkline
     realized_vol_history: Vec<u64>,     // RV history for sparkline
@@ -50,7 +62,10 @@ impl App {
         Ok(Self {
             api_client,
             api_url,
+            view_mode: ViewMode::Signals,
             signals_view: SignalsView::new(),
+            hourly_stats_view: HourlyStatsView::new(),
+            vol_skew_view: VolSkewView::new(),
             contracts: Vec::new(),
             current_btc_price: 0.0,
             connection_state: ConnectionState::Connecting,
@@ -61,6 +76,8 @@ impl App {
             show_help: false,
             help_scroll: 0,
             volatility_data: VolatilityData::default(),
+            hourly_stats: HourlyStats::default(),
+            vol_skew: VolatilitySkew::default(),
             btc_price_history: Vec::new(),
             realized_vol_history: Vec::new(),
             implied_vol_history: Vec::new(),
@@ -132,6 +149,24 @@ impl App {
                 self.show_help = false;
                 self.help_scroll = 0;
             }
+            // View switching
+            KeyCode::Char('1') => {
+                self.view_mode = ViewMode::Signals;
+            }
+            KeyCode::Char('2') => {
+                self.view_mode = ViewMode::HourlyStats;
+                // Fetch hourly stats if not already loaded
+                if self.hourly_stats.total_samples == 0 {
+                    self.fetch_hourly_stats().await;
+                }
+            }
+            KeyCode::Char('3') => {
+                self.view_mode = ViewMode::VolSkew;
+                // Fetch vol skew if not already loaded
+                if self.vol_skew.skew_interpretation.is_empty() {
+                    self.fetch_vol_skew().await;
+                }
+            }
             KeyCode::Up => {
                 if self.show_help {
                     self.help_scroll = self.help_scroll.saturating_sub(1);
@@ -199,6 +234,28 @@ impl App {
         }
     }
 
+    async fn fetch_hourly_stats(&mut self) {
+        match self.api_client.get_hourly_stats().await {
+            Ok(stats) => {
+                self.hourly_stats = stats;
+            }
+            Err(e) => {
+                self.error_message = Some(format!("Failed to fetch hourly stats: {}", e));
+            }
+        }
+    }
+
+    async fn fetch_vol_skew(&mut self) {
+        match self.api_client.get_volatility_skew().await {
+            Ok(skew) => {
+                self.vol_skew = skew;
+            }
+            Err(e) => {
+                self.error_message = Some(format!("Failed to fetch volatility skew: {}", e));
+            }
+        }
+    }
+
     /// Update sparkline history, keeping last 50 data points
     fn update_sparkline_history(history: &mut Vec<u64>, new_value: u64) {
         history.push(new_value);
@@ -224,8 +281,18 @@ impl App {
         // Render volatility regime banner
         self.render_vol_regime(frame, chunks[1]);
 
-        // Render signals table
-        self.signals_view.render(frame, chunks[2], &self.contracts);
+        // Render main content based on view mode
+        match self.view_mode {
+            ViewMode::Signals => {
+                self.signals_view.render(frame, chunks[2], &self.contracts);
+            }
+            ViewMode::HourlyStats => {
+                self.hourly_stats_view.render(frame, chunks[2], &self.hourly_stats);
+            }
+            ViewMode::VolSkew => {
+                self.vol_skew_view.render(frame, chunks[2], &self.vol_skew);
+            }
+        }
 
         // Render footer
         self.render_footer(frame, chunks[3]);
@@ -307,15 +374,35 @@ impl App {
                 Span::styled(error, Style::default().fg(Color::Red)),
             ])
         } else {
+            // Show current view
+            let view_name = match self.view_mode {
+                ViewMode::Signals => "SIGNALS",
+                ViewMode::HourlyStats => "HOURLY STATS",
+                ViewMode::VolSkew => "VOL SKEW",
+            };
+
+            let view_color = match self.view_mode {
+                ViewMode::Signals => Color::Green,
+                ViewMode::HourlyStats => Color::Cyan,
+                ViewMode::VolSkew => Color::Magenta,
+            };
+
             Line::from(vec![
+                Span::styled("View: ", Style::default().fg(Color::Gray)),
+                Span::styled(view_name, Style::default().fg(view_color).add_modifier(Modifier::BOLD)),
+                Span::raw("  │  "),
+                Span::styled("[1] ", Style::default().fg(Color::Yellow)),
+                Span::raw("Signals  "),
+                Span::styled("[2] ", Style::default().fg(Color::Yellow)),
+                Span::raw("Hourly Stats  "),
+                Span::styled("[3] ", Style::default().fg(Color::Yellow)),
+                Span::raw("Vol Skew  │  "),
                 Span::styled("[r] ", Style::default().fg(Color::Yellow)),
                 Span::raw("Refresh  "),
                 Span::styled("[h/?] ", Style::default().fg(Color::Yellow)),
                 Span::raw("Help  "),
                 Span::styled("[q] ", Style::default().fg(Color::Yellow)),
-                Span::raw("Quit  "),
-                Span::styled("[↑↓] ", Style::default().fg(Color::Yellow)),
-                Span::raw("Navigate"),
+                Span::raw("Quit"),
             ])
         };
 
