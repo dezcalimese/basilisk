@@ -18,7 +18,33 @@ impl SignalsView {
         }
     }
 
-    pub fn render(&mut self, frame: &mut Frame, area: Rect, contracts: &[Contract]) {
+    pub fn render(&mut self, frame: &mut Frame, area: Rect, contracts: &[Contract], extreme_mode: bool, current_btc_price: f64) {
+        // Filter contracts for extreme mode if enabled
+        let filtered_contracts: Vec<&Contract> = if extreme_mode {
+            contracts
+                .iter()
+                .filter(|contract| {
+                    // Extreme mode criteria:
+                    // 1. Implied probability < 25% (market thinks unlikely)
+                    // 2. Requires move > 3%
+                    // 3. Positive EV
+                    let implied_prob = contract.implied_probability.unwrap_or(0.5);
+                    let strike = contract.strike_price.unwrap_or(0.0);
+                    let required_move_pct = if current_btc_price > 0.0 {
+                        ((strike - current_btc_price) / current_btc_price * 100.0).abs()
+                    } else {
+                        0.0
+                    };
+
+                    implied_prob < 0.25
+                        && required_move_pct > 3.0
+                        && contract.expected_value > 0.0
+                })
+                .collect()
+        } else {
+            contracts.iter().collect()
+        };
+
         let header_cells = [
             "Strike",
             "Expiry",
@@ -35,7 +61,7 @@ impl SignalsView {
             .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
             .bottom_margin(1);
 
-        let rows: Vec<Row> = contracts
+        let rows: Vec<Row> = filtered_contracts
             .iter()
             .map(|contract| {
                 let _ev_color = get_ev_color(contract.expected_value);
@@ -79,12 +105,25 @@ impl SignalsView {
             Constraint::Length(10), // Action
         ];
 
+        let title = if extreme_mode {
+            " 🎲 EXTREME VOLATILITY OPPORTUNITIES (Implied <25% | Move >3%) "
+        } else {
+            " ACTIVE SIGNALS (Bitcoin Hourly Contracts) "
+        };
+
+        let title_color = if extreme_mode {
+            Color::Red
+        } else {
+            Color::White
+        };
+
         let table = Table::new(rows, widths)
             .header(header)
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title(" ACTIVE SIGNALS (Bitcoin Hourly Contracts) "),
+                    .title(title)
+                    .border_style(Style::default().fg(title_color)),
             )
             .highlight_style(Style::default().bg(Color::DarkGray))
             .highlight_symbol("▶ ");

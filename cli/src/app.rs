@@ -34,6 +34,7 @@ pub struct App {
     api_client: ApiClient,
     api_url: String,
     view_mode: ViewMode,
+    extreme_mode: bool,  // Toggle for extreme volatility opportunities
     signals_view: SignalsView,
     hourly_stats_view: HourlyStatsView,
     vol_skew_view: VolSkewView,
@@ -63,6 +64,7 @@ impl App {
             api_client,
             api_url,
             view_mode: ViewMode::Signals,
+            extreme_mode: false,
             signals_view: SignalsView::new(),
             hourly_stats_view: HourlyStatsView::new(),
             vol_skew_view: VolSkewView::new(),
@@ -166,6 +168,10 @@ impl App {
                 if self.vol_skew.skew_interpretation.is_empty() {
                     self.fetch_vol_skew().await;
                 }
+            }
+            // Extreme mode toggle
+            KeyCode::Char('e') | KeyCode::Char('E') => {
+                self.extreme_mode = !self.extreme_mode;
             }
             KeyCode::Up => {
                 if self.show_help {
@@ -284,7 +290,7 @@ impl App {
         // Render main content based on view mode
         match self.view_mode {
             ViewMode::Signals => {
-                self.signals_view.render(frame, chunks[2], &self.contracts);
+                self.signals_view.render(frame, chunks[2], &self.contracts, self.extreme_mode, self.current_btc_price);
             }
             ViewMode::HourlyStats => {
                 self.hourly_stats_view.render(frame, chunks[2], &self.hourly_stats);
@@ -376,23 +382,44 @@ impl App {
         } else {
             // Show current view
             let view_name = match self.view_mode {
-                ViewMode::Signals => "SIGNALS",
+                ViewMode::Signals => {
+                    if self.extreme_mode {
+                        "SIGNALS (🎲 EXTREME)"
+                    } else {
+                        "SIGNALS"
+                    }
+                },
                 ViewMode::HourlyStats => "HOURLY STATS",
                 ViewMode::VolSkew => "VOL SKEW",
             };
 
             let view_color = match self.view_mode {
-                ViewMode::Signals => Color::Green,
+                ViewMode::Signals => {
+                    if self.extreme_mode {
+                        Color::Red
+                    } else {
+                        Color::Green
+                    }
+                },
                 ViewMode::HourlyStats => Color::Cyan,
                 ViewMode::VolSkew => Color::Magenta,
             };
 
-            Line::from(vec![
+            let mut spans = vec![
                 Span::styled("View: ", Style::default().fg(Color::Gray)),
                 Span::styled(view_name, Style::default().fg(view_color).add_modifier(Modifier::BOLD)),
                 Span::raw("  │  "),
                 Span::styled("[1] ", Style::default().fg(Color::Yellow)),
                 Span::raw("Signals  "),
+            ];
+
+            // Show [e] shortcut only in signals view
+            if self.view_mode == ViewMode::Signals {
+                spans.push(Span::styled("[e] ", Style::default().fg(Color::Yellow)));
+                spans.push(Span::raw("Extreme  "));
+            }
+
+            spans.extend(vec![
                 Span::styled("[2] ", Style::default().fg(Color::Yellow)),
                 Span::raw("Hourly Stats  "),
                 Span::styled("[3] ", Style::default().fg(Color::Yellow)),
@@ -403,7 +430,9 @@ impl App {
                 Span::raw("Help  "),
                 Span::styled("[q] ", Style::default().fg(Color::Yellow)),
                 Span::raw("Quit"),
-            ])
+            ]);
+
+            Line::from(spans)
         };
 
         let paragraph = Paragraph::new(footer_text)
@@ -424,15 +453,34 @@ impl App {
             .split(area);
 
         // Left side: Volatility regime and stats
-        let (regime_color, regime_text) = if self.volatility_data.regime.is_empty() {
-            (Color::Gray, "UNKNOWN")
+        let rv = self.volatility_data.realized_vol;
+        let iv = self.volatility_data.implied_vol;
+        let vol_multiplier = if iv > 0.0 { rv / iv } else { 1.0 };
+        let is_extreme_vol = vol_multiplier >= 1.2 || rv >= 0.60;
+
+        let (_regime_color, regime_text, regime_style) = if self.volatility_data.regime.is_empty() {
+            (Color::Gray, "UNKNOWN", Style::default().fg(Color::Gray))
         } else {
             match self.volatility_data.regime.as_str() {
-                "CALM" => (Color::Green, "CALM"),
-                "NORMAL" => (Color::Yellow, "NORMAL"),
-                "ELEVATED" => (Color::LightRed, "ELEVATED"),
-                "CRISIS" => (Color::Red, "CRISIS"),
-                _ => (Color::White, self.volatility_data.regime.as_str()),
+                "CALM" => (Color::Green, "CALM", Style::default().fg(Color::Green)),
+                "NORMAL" => (Color::Yellow, "NORMAL", Style::default().fg(Color::Yellow)),
+                "ELEVATED" => {
+                    let style = if is_extreme_vol {
+                        Style::default()
+                            .fg(Color::LightRed)
+                            .add_modifier(Modifier::BOLD | Modifier::RAPID_BLINK)
+                    } else {
+                        Style::default().fg(Color::LightRed)
+                    };
+                    (Color::LightRed, "ELEVATED 🔥", style)
+                },
+                "CRISIS" => {
+                    let style = Style::default()
+                        .fg(Color::Red)
+                        .add_modifier(Modifier::BOLD | Modifier::RAPID_BLINK);
+                    (Color::Red, "CRISIS 🔥🔥", style)
+                },
+                _ => (Color::White, self.volatility_data.regime.as_str(), Style::default().fg(Color::White)),
             }
         };
 
@@ -443,7 +491,7 @@ impl App {
         let text = vec![
             Line::from(vec![
                 Span::raw("Regime: "),
-                Span::styled(regime_text, Style::default().fg(regime_color).add_modifier(Modifier::BOLD)),
+                Span::styled(regime_text, regime_style),
                 Span::raw(" │ "),
                 Span::raw(format!("RV: {}", rv_pct)),
                 Span::raw(" │ "),
