@@ -217,6 +217,114 @@ class HourlyPriceStatistics:
             "std_hourly_return": std,
         }
 
+    def calculate_extreme_move_probabilities(
+        self, candles: list[Any], lookback_hours: int = 720
+    ) -> dict[str, Any]:
+        """
+        Calculate historical frequency of EXTREME hourly moves.
+        Critical for high-volatility lottery ticket strategies.
+
+        Returns probability of seeing moves >2%, >3%, >4%, >5%, >6%
+        These are the "lottery ticket" strikes that pay 5x-10x.
+
+        Args:
+            candles: List of OHLCV candles
+            lookback_hours: Number of hours to analyze
+
+        Returns:
+            Dictionary with extreme move probabilities and frequencies
+        """
+        if not candles or len(candles) < 2:
+            return self._get_default_extreme_stats()
+
+        hourly_returns = []
+
+        # Calculate absolute hourly returns
+        for i in range(1, min(len(candles), lookback_hours)):
+            prev_candle = candles[i - 1]
+            curr_candle = candles[i]
+
+            # Handle both dict and list formats
+            if isinstance(curr_candle, dict):
+                prev_close = float(prev_candle["close"])
+                curr_close = float(curr_candle["close"])
+            else:
+                prev_close = float(prev_candle[4])
+                curr_close = float(curr_candle[4])
+
+            if prev_close == 0:
+                continue
+
+            return_pct = abs((curr_close / prev_close) - 1)  # Absolute value
+            hourly_returns.append(return_pct)
+
+        if not hourly_returns:
+            return self._get_default_extreme_stats()
+
+        total_hours = len(hourly_returns)
+
+        # Count extreme moves at different thresholds
+        thresholds = [0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08]  # 2% through 8%
+        extreme_probs = {}
+
+        for threshold in thresholds:
+            count = sum(1 for ret in hourly_returns if ret > threshold)
+            probability = count / total_hours if total_hours > 0 else 0
+
+            # Expected frequency over different timeframes
+            per_100_hours = probability * 100
+            per_week = probability * 168  # 168 hours in a week
+            per_month = probability * 720  # ~30 days
+
+            threshold_pct = int(threshold * 100)
+            extreme_probs[f"move_{threshold_pct}pct"] = {
+                "threshold": threshold,
+                "probability": float(probability),
+                "count": count,
+                "per_100_hours": float(per_100_hours),
+                "per_week": float(per_week),
+                "per_month": float(per_month),
+                "odds": f"1 in {int(1/probability) if probability > 0 else 999999}",
+            }
+
+        # Calculate volatility regime multiplier
+        # If current realized vol is high, extreme moves are MORE likely
+        recent_vol = np.std(hourly_returns[-24:]) if len(hourly_returns) >= 24 else np.std(hourly_returns)
+        historical_vol = np.std(hourly_returns)
+        vol_multiplier = recent_vol / historical_vol if historical_vol > 0 else 1.0
+
+        return {
+            "extreme_probabilities": extreme_probs,
+            "total_hours_analyzed": total_hours,
+            "recent_volatility": float(recent_vol),
+            "historical_volatility": float(historical_vol),
+            "volatility_multiplier": float(vol_multiplier),
+            "regime": self._classify_extreme_regime(vol_multiplier),
+        }
+
+    def _classify_extreme_regime(self, vol_multiplier: float) -> str:
+        """Classify current volatility regime for extreme moves."""
+        if vol_multiplier >= 2.0:
+            return "CRISIS"
+        elif vol_multiplier >= 1.5:
+            return "ELEVATED"
+        elif vol_multiplier >= 1.2:
+            return "NORMAL"
+        else:
+            return "CALM"
+
+    def _get_default_extreme_stats(self) -> dict[str, Any]:
+        """Return default extreme move statistics."""
+        return {
+            "extreme_probabilities": {},
+            "total_hours_analyzed": 0,
+            "recent_volatility": 0.01,
+            "historical_volatility": 0.01,
+            "volatility_multiplier": 1.0,
+            "regime": "UNKNOWN",
+            "error": "Insufficient data",
+        }
+
     def _get_default_stats(self) -> dict[str, Any]:
         """Return default statistics when insufficient data."""
         return {

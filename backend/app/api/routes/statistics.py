@@ -152,6 +152,51 @@ async def get_volatility_skew() -> dict[str, Any]:
         )
 
 
+@router.get("/statistics/extreme-moves")
+async def get_extreme_move_probabilities(
+    hours: int = Query(default=720, ge=24, le=2160, description="Hours of history to analyze")
+) -> dict[str, Any]:
+    """
+    Calculate probability of EXTREME hourly price moves.
+    Critical for high-volatility "lottery ticket" strategies.
+
+    Returns historical frequency of moves >2%, >3%, >4%, >5%, >6%+
+    Useful for identifying when extreme strikes become viable.
+
+    Args:
+        hours: Number of hours of historical data to analyze
+
+    Returns:
+        Extreme move probabilities and volatility regime analysis
+    """
+    try:
+        # Fetch historical candles
+        btc_client = BitcoinPriceClient()
+        candles = await btc_client.get_historical_candles(hours=hours)
+
+        if not candles:
+            raise HTTPException(
+                status_code=503,
+                detail="Unable to fetch historical candle data"
+            )
+
+        # Calculate extreme move probabilities
+        stats_service = HourlyPriceStatistics()
+        extreme_data = stats_service.calculate_extreme_move_probabilities(
+            candles, lookback_hours=hours
+        )
+
+        return extreme_data
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error calculating extreme move probabilities: {str(e)}"
+        )
+
+
 @router.get("/statistics/summary")
 async def get_statistics_summary() -> dict[str, Any]:
     """

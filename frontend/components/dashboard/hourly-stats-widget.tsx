@@ -30,6 +30,19 @@ interface HourlyStats {
   total_samples: number;
 }
 
+interface ExtremeMoveData {
+  extreme_probabilities: {
+    [key: string]: {
+      threshold: number;
+      probability: number;
+      odds: string;
+      per_week: number;
+    };
+  };
+  volatility_multiplier: number;
+  regime: string;
+}
+
 interface HourlyStatsWidgetProps {
   apiUrl?: string;
   refreshInterval?: number; // milliseconds
@@ -40,20 +53,32 @@ export function HourlyStatsWidget({
   refreshInterval = 60000, // 1 minute default
 }: HourlyStatsWidgetProps) {
   const [stats, setStats] = useState<HourlyStats | null>(null);
+  const [extremeData, setExtremeData] = useState<ExtremeMoveData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch(
+        // Fetch hourly statistics
+        const statsResponse = await fetch(
           `${apiUrl}/api/v1/statistics/hourly-movements?hours=720`
         );
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+        if (!statsResponse.ok) {
+          throw new Error(`HTTP ${statsResponse.status}`);
         }
-        const data = await response.json();
-        setStats(data);
+        const statsData = await statsResponse.json();
+        setStats(statsData);
+
+        // Fetch extreme move probabilities
+        const extremeResponse = await fetch(
+          `${apiUrl}/api/v1/statistics/extreme-moves?hours=720`
+        );
+        if (extremeResponse.ok) {
+          const extremeMovesData = await extremeResponse.json();
+          setExtremeData(extremeMovesData);
+        }
+
         setError(null);
       } catch (err) {
         console.error("Failed to fetch hourly stats:", err);
@@ -149,7 +174,7 @@ export function HourlyStatsWidget({
       </div>
 
       {/* Hourly Pattern Chart */}
-      <div>
+      <div className="mb-6">
         <h4 className="text-sm font-semibold mb-2">Returns by Hour (UTC)</h4>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={hourlyData}>
@@ -177,6 +202,56 @@ export function HourlyStatsWidget({
           </BarChart>
         </ResponsiveContainer>
       </div>
+
+      {/* Extreme Move Probabilities */}
+      {extremeData && (
+        <div className="border-t pt-6">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-sm font-semibold">🔥 Extreme Move Probabilities</h4>
+            <span
+              className={`text-xs px-2 py-1 rounded ${
+                extremeData.regime === "CRISIS"
+                  ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+                  : extremeData.regime === "ELEVATED"
+                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+                  : "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+              }`}
+            >
+              {extremeData.regime} ({extremeData.volatility_multiplier.toFixed(2)}x)
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {Object.entries(extremeData.extreme_probabilities)
+              .filter(([key]) =>
+                ["move_3pct", "move_4pct", "move_5pct", "move_6pct"].includes(key)
+              )
+              .map(([key, data]) => (
+                <div
+                  key={key}
+                  className="flex justify-between items-center text-xs p-2 rounded bg-secondary/50"
+                >
+                  <span className="font-medium">
+                    &gt;{(data.threshold * 100).toFixed(0)}% move
+                  </span>
+                  <div className="flex gap-4">
+                    <span className="text-muted-foreground">
+                      {(data.probability * 100).toFixed(2)}%
+                    </span>
+                    <span className="text-muted-foreground">{data.odds}</span>
+                    <span className="text-primary font-medium">
+                      ~{data.per_week.toFixed(1)}/week
+                    </span>
+                  </div>
+                </div>
+              ))}
+          </div>
+
+          <p className="text-xs text-muted-foreground mt-4">
+            💡 {extremeData.volatility_multiplier >= 1.5 ? "High volatility regime makes extreme moves MORE likely." : "Normal volatility - extreme moves occur at historical rates."}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
