@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react"
 import { AlertTriangle, TrendingUp, TrendingDown, Target } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 
@@ -125,30 +124,22 @@ export function ExtremeOpportunitiesWidget({
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Target className="h-5 w-5" />
-            Extreme Volatility Opportunities
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </CardContent>
-      </Card>
+      <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
+        <h3 className="text-lg font-semibold flex items-center gap-2 mb-4 flex-shrink-0">
+          <Target className="h-5 w-5" />
+          Extreme Volatility Opportunities
+        </h3>
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      </div>
     )
   }
 
   if (error) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Extreme Opportunities</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-destructive">Error: {error}</p>
-        </CardContent>
-      </Card>
+      <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
+        <h3 className="text-lg font-semibold mb-4 flex-shrink-0">Extreme Opportunities</h3>
+        <p className="text-sm text-destructive">Error: {error}</p>
+      </div>
     )
   }
 
@@ -156,17 +147,17 @@ export function ExtremeOpportunitiesWidget({
   const regime = extremeData?.regime || "UNKNOWN"
 
   return (
-    <Card className="col-span-2">
-      <CardHeader>
+    <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
+      <div className="mb-6 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="flex items-center gap-2">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
               <Target className="h-5 w-5" />
               🎲 Extreme Volatility Opportunities
-            </CardTitle>
-            <CardDescription>
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1">
               High-risk, high-reward contracts for volatile markets
-            </CardDescription>
+            </p>
           </div>
           {regime && (
             <Badge
@@ -182,8 +173,8 @@ export function ExtremeOpportunitiesWidget({
             </Badge>
           )}
         </div>
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div className="flex-1 overflow-y-auto pr-2">
         {isExtremeVol && (
           <Alert variant="default" className="mb-4 border-amber-500 bg-amber-50 dark:bg-amber-950">
             <AlertTriangle className="h-4 w-4 text-amber-600" />
@@ -271,9 +262,9 @@ export function ExtremeOpportunitiesWidget({
             ⚠️ <strong>Risk Warning:</strong> These require extreme moves ({">"} 3%). Enter
             as resting orders at 8-12¢ to pay zero fees. Cancel immediately if price moves
             against you. Risk: $10-15 per trade. Reward: $50-100+ if strike hit.
-          </Alert>
+          </AlertDescription>
         </Alert>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

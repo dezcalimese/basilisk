@@ -73,7 +73,7 @@ export function VolatilitySkewChart({
 
   if (loading) {
     return (
-      <div className="glass-metric rounded-2xl p-6">
+      <div className="glass-card rounded-2xl p-6">
         <h3 className="text-lg font-semibold mb-4">Volatility Skew</h3>
         <div className="flex items-center justify-center h-64">
           <p className="text-muted-foreground">Loading skew data...</p>
@@ -84,7 +84,7 @@ export function VolatilitySkewChart({
 
   if (error || !skewData) {
     return (
-      <div className="glass-metric rounded-2xl p-6">
+      <div className="glass-card rounded-2xl p-6">
         <h3 className="text-lg font-semibold mb-4">Volatility Skew</h3>
         <div className="flex items-center justify-center h-64">
           <p className="text-destructive">{error || "No data available"}</p>
@@ -105,7 +105,7 @@ export function VolatilitySkewChart({
     .sort((a, b) => a.moneyness - b.moneyness);
 
   return (
-    <div className="glass-metric rounded-2xl p-6">
+    <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
       {/* Header */}
       <div className="mb-6">
         <h3 className="text-lg font-semibold">Volatility Skew</h3>
@@ -191,18 +191,20 @@ export function VolatilitySkewChart({
           <strong className="font-semibold">What this means:</strong>{" "}
           {skewData.skew > 0.1 ? (
             <>
-              OTM puts are more expensive than OTM calls. Market is pricing in
-              downside risk (fear). Consider selling puts.
+              Lower strikes (YES at low levels) are more expensive than higher strikes.
+              Market is pricing in downside risk (fear). If you disagree, buy YES on
+              higher strikes (bet BTC rises).
             </>
           ) : skewData.skew < -0.1 ? (
             <>
-              OTM calls are more expensive than OTM puts. Market expects upside
-              (greed). Consider selling calls.
+              Higher strikes (YES at high levels) are more expensive than lower strikes.
+              Market expects strong upside (greed). If you disagree, buy YES on lower
+              strikes (bet BTC stays lower).
             </>
           ) : (
             <>
-              Skew is relatively flat. Market has symmetric expectations. No
-              strong directional bias.
+              Skew is relatively flat. Market has symmetric expectations around current
+              price. No strong directional bias in digital option pricing.
             </>
           )}
         </p>

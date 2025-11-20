@@ -269,7 +269,7 @@ export function VolatilitySurface3D({
   }
 
   return (
-    <div className="glass-card p-4 h-full flex flex-col">
+    <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
       <div className="mb-3">
         <div className="flex items-center gap-2">
           <h3 className="text-lg font-semibold">3D Volatility Surface</h3>
@@ -320,7 +320,7 @@ export function VolatilitySurface3D({
         </p>
       </div>
 
-      <div className="flex-1" style={{ minHeight: "500px" }}>
+      <div className="flex-1 min-h-0">
         <Plot
           data={plotData}
           layout={layout}
@@ -331,7 +331,7 @@ export function VolatilitySurface3D({
       </div>
 
       {/* Stats summary */}
-      <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
+      <div className="mt-4 pt-4 border-t border-border/50 grid grid-cols-3 gap-3 text-xs flex-shrink-0">
         <div className="text-center">
           <p className="text-muted-foreground">Contracts</p>
           <p className="font-mono font-bold text-sm">{surfaceData.length}</p>

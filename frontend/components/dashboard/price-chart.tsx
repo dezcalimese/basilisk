@@ -88,7 +88,7 @@ export function PriceChart({ signals = [], height = 400 }: PriceChartProps) {
         },
       },
       width: chartContainerRef.current.clientWidth,
-      height,
+      height: chartContainerRef.current.clientHeight,
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
@@ -203,6 +203,7 @@ export function PriceChart({ signals = [], height = 400 }: PriceChartProps) {
       if (chartContainerRef.current && chartRef.current) {
         chartRef.current.applyOptions({
           width: chartContainerRef.current.clientWidth,
+          height: chartContainerRef.current.clientHeight,
         });
       }
     };
@@ -400,8 +401,8 @@ export function PriceChart({ signals = [], height = 400 }: PriceChartProps) {
   }
 
   return (
-    <div className="glass-card p-4">
-      <div className="mb-3">
+    <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
+      <div className="mb-3 flex-shrink-0">
         <div className="flex items-center justify-between mb-2">
           {/* Time Range Selector */}
           <div className="flex items-center gap-1">
@@ -481,7 +482,7 @@ export function PriceChart({ signals = [], height = 400 }: PriceChartProps) {
         )}
       </div>
 
-      <div ref={chartContainerRef} style={{ height: `${height}px`, width: '100%' }} />
+      <div ref={chartContainerRef} className="flex-1 min-h-0" style={{ width: '100%' }} />
     </div>
   );
 }

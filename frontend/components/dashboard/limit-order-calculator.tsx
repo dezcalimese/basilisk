@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { Calculator, DollarSign, TrendingUp, AlertTriangle } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
@@ -73,17 +72,17 @@ export function LimitOrderCalculator({
   const riskRewardRatio = Math.abs(targetHitProfit / maxRisk)
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+    <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
+      <div className="mb-6 flex-shrink-0">
+        <h3 className="text-lg font-semibold flex items-center gap-2">
           <Calculator className="h-5 w-5" />
           💰 Limit Order Calculator
-        </CardTitle>
-        <CardDescription>
+        </h3>
+        <p className="text-sm text-muted-foreground mt-1">
           Plan your extreme volatility trade with profit/loss scenarios
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+        </p>
+      </div>
+      <div className="space-y-6 flex-1 overflow-y-auto pr-2">
         {/* Direction Toggle */}
         <div className="flex gap-2">
           <button
@@ -178,9 +177,9 @@ export function LimitOrderCalculator({
         <div className="space-y-3">
           <h4 className="font-semibold text-sm">📊 Profit/Loss Scenarios</h4>
 
-          <div className="space-y-2">
-            <div className="flex justify-between items-center p-3 rounded-md bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800">
-              <span className="text-sm font-medium text-green-900 dark:text-green-100">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col justify-between p-3 rounded-md bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800">
+              <span className="text-xs font-medium text-green-900 dark:text-green-100 mb-1">
                 🎯 Target Hit (${calc.targetStrike.toLocaleString()})
               </span>
               <span className="font-bold text-green-600 dark:text-green-400">
@@ -188,8 +187,8 @@ export function LimitOrderCalculator({
               </span>
             </div>
 
-            <div className="flex justify-between items-center p-3 rounded-md bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
-              <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+            <div className="flex flex-col justify-between p-3 rounded-md bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
+              <span className="text-xs font-medium text-blue-900 dark:text-blue-100 mb-1">
                 📈 50/50 Zone (${fiftyFiftyPriceLevel.toLocaleString()})
               </span>
               <span className="font-bold text-blue-600 dark:text-blue-400">
@@ -197,8 +196,8 @@ export function LimitOrderCalculator({
               </span>
             </div>
 
-            <div className="flex justify-between items-center p-3 rounded-md bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
-              <span className="text-sm font-medium text-amber-900 dark:text-amber-100">
+            <div className="flex flex-col justify-between p-3 rounded-md bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
+              <span className="text-xs font-medium text-amber-900 dark:text-amber-100 mb-1">
                 ⚠️ No Move (${currentPrice.toLocaleString()})
               </span>
               <span className="font-semibold text-amber-600 dark:text-amber-400">
@@ -206,8 +205,8 @@ export function LimitOrderCalculator({
               </span>
             </div>
 
-            <div className="flex justify-between items-center p-3 rounded-md bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800">
-              <span className="text-sm font-medium text-red-900 dark:text-red-100">
+            <div className="flex flex-col justify-between p-3 rounded-md bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800">
+              <span className="text-xs font-medium text-red-900 dark:text-red-100 mb-1">
                 ❌ Wrong Way (${cancelZone.toLocaleString()})
               </span>
               <span className="font-semibold text-red-600 dark:text-red-400">
@@ -255,7 +254,7 @@ export function LimitOrderCalculator({
             {targetHitProfit.toFixed(2)}.
           </AlertDescription>
         </Alert>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

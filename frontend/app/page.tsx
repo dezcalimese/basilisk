@@ -5,6 +5,7 @@ import { MetricCard } from "@/components/dashboard/metric-card";
 import { SignalList } from "@/components/dashboard/signal-list";
 import { AnimatedPrice } from "@/components/dashboard/animated-price";
 import { HelpDialog } from "@/components/help-dialog";
+import { CalculatorDialog } from "@/components/calculator-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { VolatilitySurface3D } from "@/components/dashboard/volatility-surface-3d";
 import { PriceChart } from "@/components/dashboard/price-chart";
@@ -12,13 +13,14 @@ import { ConnectionStatus } from "@/components/connection-status";
 import { HourlyStatsWidget } from "@/components/dashboard/hourly-stats-widget";
 import { VolatilitySkewChart } from "@/components/dashboard/volatility-skew-chart";
 import { ExtremeOpportunitiesWidget } from "@/components/dashboard/extreme-opportunities";
-import { LimitOrderCalculator } from "@/components/dashboard/limit-order-calculator";
+import { OrderBookDepth } from "@/components/dashboard/order-book-depth";
 import { useRealtimeData } from "@/hooks/use-realtime-data";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { useAnalyticalStore } from "@/lib/stores/analytical-store";
 
 export default function Home() {
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
 
   // Connect to SSE stream for real-time updates
   useRealtimeData({
@@ -38,6 +40,13 @@ export default function Home() {
     return () => clearInterval(timer);
   }, []);
 
+  // Auto-select first signal if none selected
+  useEffect(() => {
+    if (signals.length > 0 && !selectedTicker) {
+      setSelectedTicker(signals[0].ticker);
+    }
+  }, [signals, selectedTicker]);
+
   const activeSignalsCount = signals.filter((s) => s.is_active).length;
   const avgEV =
     signals.length > 0
@@ -51,21 +60,21 @@ export default function Home() {
   // Calculate live time to expiry in detailed format
   const nextExpiry = signals.length > 0 && signals[0].expiry_time
     ? (() => {
-        const expiryTime = new Date(signals[0].expiry_time).getTime();
-        const msRemaining = Math.max(0, expiryTime - currentTime);
-        const totalSeconds = Math.floor(msRemaining / 1000);
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = totalSeconds % 60;
+      const expiryTime = new Date(signals[0].expiry_time).getTime();
+      const msRemaining = Math.max(0, expiryTime - currentTime);
+      const totalSeconds = Math.floor(msRemaining / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
 
-        if (hours > 0) {
-          return `${hours}h ${minutes}m ${seconds}s`;
-        } else if (minutes > 0) {
-          return `${minutes}m ${seconds}s`;
-        } else {
-          return `${seconds}s`;
-        }
-      })()
+      if (hours > 0) {
+        return `${hours}h ${minutes}m ${seconds}s`;
+      } else if (minutes > 0) {
+        return `${minutes}m ${seconds}s`;
+      } else {
+        return `${seconds}s`;
+      }
+    })()
     : null;
 
   const isLoading = connectionState === 'connecting' && signals.length === 0;
@@ -76,29 +85,29 @@ export default function Home() {
       {/* Header */}
       <header className="glass-header sticky top-0 z-40">
         <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div>
-                <h1 className="text-2xl font-bold">Basilisk</h1>
-                <p className="text-muted-foreground text-sm">A serpent's eye for mispriced markets</p>
+                <h1 className="text-xl sm:text-2xl font-bold">Basilisk</h1>
+                <p className="text-muted-foreground text-xs sm:text-sm hidden sm:block">A serpent's eye for mispriced markets</p>
               </div>
-              <ConnectionStatus showLabel={true} showError={false} />
+              <ConnectionStatus showLabel={false} showError={false} />
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
               <ThemeToggle />
               <div className="text-right">
-                <div className="text-sm text-muted-foreground">
+                <div className="text-xs sm:text-sm text-muted-foreground hidden sm:block">
                   Kalshi Trading Dashboard
                 </div>
                 {currentBtcPrice > 0 && (
-                  <div className="mt-2 flex items-center justify-end gap-2">
+                  <div className="flex items-center justify-end gap-2">
                     <AnimatedPrice price={currentBtcPrice} decimals={2} />
-                    <span className="text-sm text-muted-foreground">BTC</span>
+                    <span className="text-xs sm:text-sm text-muted-foreground">BTC</span>
                   </div>
                 )}
                 {nextExpiry && (
                   <div className="text-xs text-muted-foreground mt-1 font-mono">
-                    Next expiry: {nextExpiry}
+                    {nextExpiry}
                   </div>
                 )}
               </div>
@@ -108,7 +117,7 @@ export default function Home() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-4">
+      <main className="container mx-auto px-2 sm:px-4 py-4">
         {isLoading && (
           <div className="text-center py-12">
             <p className="text-muted-foreground">Connecting to data stream...</p>
@@ -128,7 +137,7 @@ export default function Home() {
         {!isLoading && (
           <>
             {/* All Metrics in One Row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-4 mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4 mb-4">
               <MetricCard
                 title="Active Signals"
                 value={activeSignalsCount}
@@ -170,36 +179,47 @@ export default function Home() {
               )}
             </div>
 
-            {/* Price Chart - Full Width */}
-            <div className="mb-4">
-              <PriceChart signals={signals} height={400} />
+            {/* Price Chart (1/2) + Order Book (1/4) + Active Signals (1/4) */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
+              <div className="lg:col-span-2 h-[500px]">
+                <PriceChart signals={signals} height={400} />
+              </div>
+              <div className="lg:col-span-1 h-[500px]">
+                <OrderBookDepth ticker={selectedTicker || undefined} />
+              </div>
+              <div className="lg:col-span-1 h-[500px]">
+                <SignalList
+                  signals={signals}
+                  currentTime={currentTime}
+                  selectedTicker={selectedTicker}
+                  onSelectSignal={(ticker) => {
+                    // Toggle: if clicking the same ticker, deselect it
+                    setSelectedTicker(ticker === selectedTicker ? null : ticker);
+                  }}
+                />
+              </div>
             </div>
 
-            {/* Hourly Stats + Volatility Skew */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-              <HourlyStatsWidget />
-              <VolatilitySkewChart />
-            </div>
-
-            {/* EXTREME VOL WIDGETS: Opportunities + Calculator */}
+            {/* Hourly Stats (2/3) + Extreme Opportunities (1/3) */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-              <ExtremeOpportunitiesWidget />
-              <LimitOrderCalculator />
+              <div className="lg:col-span-2 h-[600px]">
+                <HourlyStatsWidget />
+              </div>
+              <div className="lg:col-span-1 h-[600px]">
+                <ExtremeOpportunitiesWidget />
+              </div>
             </div>
 
-            {/* Main Grid: Volatility Surface (2/3) + Active Signals List (1/3) */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-              {/* Volatility Surface - 2/3 width */}
-              <div className="lg:col-span-2 h-full">
+            {/* Volatility Skew + 3D Volatility Surface */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+              <div className="lg:col-span-2">
+                <VolatilitySkewChart />
+              </div>
+              <div className="lg:col-span-3">
                 <VolatilitySurface3D
                   signals={signals}
                   currentBtcPrice={currentBtcPrice > 0 ? currentBtcPrice : null}
                 />
-              </div>
-
-              {/* Active Signals List - 1/3 width */}
-              <div className="lg:col-span-1 h-full">
-                <SignalList signals={signals} currentTime={currentTime} />
               </div>
             </div>
           </>
@@ -217,6 +237,9 @@ export default function Home() {
 
       {/* Help Dialog */}
       <HelpDialog />
+
+      {/* Calculator Dialog */}
+      <CalculatorDialog />
     </div>
   );
 }

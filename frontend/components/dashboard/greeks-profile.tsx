@@ -30,7 +30,7 @@ export function GreeksProfile({ signal, compact = false }: GreeksProfileProps) {
     return (
       <div className="text-xs mt-2 border-t border-border/30 pt-2">
         <div className="text-muted-foreground mb-1.5">Greeks:</div>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+        <div className="grid grid-cols-2 gap-x-8 gap-y-1.5">
           <GreekItem
             label="Delta (Δ)"
             value={delta}
@@ -135,8 +135,8 @@ function GreekItem({
     ? value > 0
       ? "text-green-600"
       : value < 0
-      ? "text-red-600"
-      : "text-muted-foreground"
+        ? "text-red-600"
+        : "text-muted-foreground"
     : "text-foreground";
 
   return (
@@ -153,11 +153,11 @@ function GreekItem({
       </button>
       {showTooltip && (
         <div className="fixed z-50 w-56 bg-background/95 backdrop-blur-sm border border-border rounded-lg p-3 shadow-xl text-xs"
-             style={{
-               top: '50%',
-               left: '50%',
-               transform: 'translate(-50%, -50%)'
-             }}>
+          style={{
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)'
+          }}>
           <div className="space-y-1">
             <p className="font-semibold text-foreground mb-1">{label.split(' ')[0]}</p>
             <p className="text-muted-foreground">{tooltip}</p>
@@ -192,8 +192,8 @@ function GreekRow({
     ? value > 0
       ? "text-green-600"
       : value < 0
-      ? "text-red-600"
-      : "text-muted-foreground"
+        ? "text-red-600"
+        : "text-muted-foreground"
     : "text-foreground";
 
   const barColor = colorize

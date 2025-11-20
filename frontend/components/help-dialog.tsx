@@ -145,8 +145,12 @@ export function HelpDialog() {
                   <span className="text-sm text-muted-foreground">Toggle help</span>
                 </div>
                 <div className="flex items-center gap-3">
+                  <kbd className="px-3 py-1.5 bg-muted rounded text-sm font-mono">C</kbd>
+                  <span className="text-sm text-muted-foreground">Toggle calculator</span>
+                </div>
+                <div className="flex items-center gap-3">
                   <kbd className="px-3 py-1.5 bg-muted rounded text-sm font-mono">ESC</kbd>
-                  <span className="text-sm text-muted-foreground">Close help</span>
+                  <span className="text-sm text-muted-foreground">Close dialogs</span>
                 </div>
               </div>
             </section>

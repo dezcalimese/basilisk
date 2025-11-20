@@ -6,7 +6,7 @@ from typing import AsyncGenerator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import candles, current, health, signals, statistics
+from app.api.routes import candles, current, health, orderbook, signals, statistics
 from app.core.config import settings
 from app.db.database import init_db
 
@@ -43,6 +43,7 @@ app.include_router(signals.router, prefix=settings.api_v1_prefix, tags=["signals
 app.include_router(current.router, prefix=settings.api_v1_prefix, tags=["current"])
 app.include_router(candles.router, prefix=settings.api_v1_prefix, tags=["candles"])
 app.include_router(statistics.router, prefix=settings.api_v1_prefix, tags=["statistics"])
+app.include_router(orderbook.router, prefix=settings.api_v1_prefix, tags=["orderbook"])
 
 
 @app.get("/")

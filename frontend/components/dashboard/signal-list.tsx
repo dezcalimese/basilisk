@@ -17,6 +17,8 @@ import { GreeksProfile, calculateGreeksForSignal } from "@/components/dashboard/
 interface SignalListProps {
   signals: TradeSignal[];
   currentTime: number;
+  selectedTicker?: string | null;
+  onSelectSignal?: (ticker: string) => void;
 }
 
 /**
@@ -112,10 +114,13 @@ function parseTickerInfo(ticker: string, expiryTime?: string) {
   };
 }
 
-export function SignalList({ signals, currentTime }: SignalListProps) {
-  if (signals.length === 0) {
+export function SignalList({ signals, currentTime, selectedTicker, onSelectSignal }: SignalListProps) {
+  // Filter out HOLD signals - only show actionable trades
+  const actionableSignals = signals.filter(signal => signal.signal_type !== "HOLD");
+
+  if (actionableSignals.length === 0) {
     return (
-      <div className="glass-table p-4 h-full flex flex-col">
+      <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
         <h2 className="text-lg font-bold mb-3">Active Signals</h2>
         <p className="text-muted-foreground text-center py-8 text-sm">
           No active signals at the moment
@@ -125,14 +130,16 @@ export function SignalList({ signals, currentTime }: SignalListProps) {
   }
 
   return (
-    <div className="glass-table p-4 h-full flex flex-col">
+    <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
       <h2 className="text-lg font-bold mb-3">Active Signals</h2>
-      <div className="space-y-3 overflow-y-auto flex-1 pr-2" style={{ maxHeight: "calc(100vh - 300px)" }}>
-        {signals.map((signal) => (
+      <div className="space-y-3 overflow-y-auto flex-1 pr-2">
+        {actionableSignals.map((signal) => (
           <SignalRow
             key={signal.id}
             signal={signal}
             currentTime={currentTime}
+            isSelected={selectedTicker === signal.ticker}
+            onSelect={() => onSelectSignal?.(signal.ticker)}
           />
         ))}
       </div>
@@ -143,9 +150,11 @@ export function SignalList({ signals, currentTime }: SignalListProps) {
 interface SignalRowProps {
   signal: TradeSignal;
   currentTime: number;
+  isSelected?: boolean;
+  onSelect?: () => void;
 }
 
-function SignalRow({ signal, currentTime }: SignalRowProps) {
+function SignalRow({ signal, currentTime, isSelected, onSelect }: SignalRowProps) {
   const tickerInfo = parseTickerInfo(signal.ticker, signal.expiry_time);
   const animatedEv = useAnimatedNumber(signal.expected_value ?? 0, 500);
   const animatedYes = useAnimatedNumber(signal.yes_price ?? 0, 500);
@@ -168,83 +177,134 @@ function SignalRow({ signal, currentTime }: SignalRowProps) {
   const evIsPositive = animatedEv >= 0;
 
   return (
-    <div className="flex items-start justify-between p-3 rounded-lg border border-border/50 hover:border-border transition-all duration-200 hover:shadow-md backdrop-blur-sm">
-      <div className="flex-1 min-w-0">
-        {/* Readable expiry date/time */}
-        <div className="flex items-center gap-2 mb-1">
-          <h3 className="text-sm font-bold truncate">
-            {tickerInfo.date} @ {tickerInfo.time}
-          </h3>
-          <Badge
-            variant={
-              signal.signal_type === "BUY YES"
-                ? "default"
-                : signal.signal_type === "BUY NO"
-                ? "secondary"
-                : "outline"
-            }
-            className="text-xs py-0 px-1.5"
-          >
-            {signal.signal_type}
-          </Badge>
+    <div
+      onClick={onSelect}
+      className={`p-3 rounded-lg border transition-all duration-200 backdrop-blur-sm cursor-pointer ${
+        isSelected
+          ? "border-primary bg-primary/10 shadow-md"
+          : "border-border/50 hover:border-border hover:shadow-md"
+      }`}
+    >
+      {/* Collapsed view for non-selected signals */}
+      {!isSelected ? (
+        <div className="flex items-center justify-between">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold truncate">
+                {tickerInfo.date} @ {tickerInfo.time}
+              </h3>
+              <Badge
+                variant={
+                  signal.signal_type === "BUY YES"
+                    ? "default"
+                    : signal.signal_type === "BUY NO"
+                    ? "secondary"
+                    : "outline"
+                }
+                className="text-xs py-0 px-1.5"
+              >
+                {signal.signal_type}
+              </Badge>
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Strike: {signal.strike_price ? `$${signal.strike_price.toLocaleString()}` : tickerInfo.strike}
+            </div>
+          </div>
+          <div className="text-right ml-3 flex-shrink-0">
+            <div
+              className={`text-base font-bold ${
+                evIsPositive ? "text-green-600" : "text-red-600"
+              }`}
+            >
+              {evIsPositive ? "+" : ""}
+              {(animatedEv * 100).toFixed(1)}%
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {timeRemainingLabel}
+            </div>
+          </div>
         </div>
+      ) : (
+        /* Expanded view for selected signal */
+        <div className="flex items-start justify-between">
+          <div className="flex-1 min-w-0">
+            {/* Readable expiry date/time */}
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-sm font-bold truncate">
+                {tickerInfo.date} @ {tickerInfo.time}
+              </h3>
+              <Badge
+                variant={
+                  signal.signal_type === "BUY YES"
+                    ? "default"
+                    : signal.signal_type === "BUY NO"
+                    ? "secondary"
+                    : "outline"
+                }
+                className="text-xs py-0 px-1.5"
+              >
+                {signal.signal_type}
+              </Badge>
+            </div>
 
-        {/* Strike price */}
-        <div className="text-xs font-semibold text-muted-foreground mb-1">
-          Strike: {signal.strike_price ? `$${signal.strike_price.toLocaleString()}` : tickerInfo.strike}
-          {signal.current_btc_price && (
-            <span className="ml-1 text-xs font-normal">
-              (BTC: ${signal.current_btc_price.toLocaleString()})
-            </span>
-          )}
-        </div>
+            {/* Strike price */}
+            <div className="text-xs font-semibold text-muted-foreground mb-1">
+              Strike: {signal.strike_price ? `$${signal.strike_price.toLocaleString()}` : tickerInfo.strike}
+              {signal.current_btc_price && (
+                <span className="ml-1 text-xs font-normal">
+                  (BTC: ${signal.current_btc_price.toLocaleString()})
+                </span>
+              )}
+            </div>
 
-        {/* Ticker reference */}
-        <div className="text-xs text-muted-foreground mb-1 font-mono truncate">
-          {signal.ticker}
-        </div>
+            {/* Ticker reference */}
+            <div className="text-xs text-muted-foreground mb-1 font-mono truncate">
+              {signal.ticker}
+            </div>
 
-        {/* Trading details */}
-        <div className="text-xs text-muted-foreground space-y-0.5">
-          <div>
-            Recommended entry: ${signal.recommended_price.toFixed(2)}
-            {timeRemainingLabel && (
-              <span className="ml-1">• {timeRemainingLabel} to expiry</span>
+            {/* Trading details */}
+            <div className="text-xs text-muted-foreground space-y-0.5">
+              <div>
+                Recommended entry: ${signal.recommended_price.toFixed(2)}
+                {timeRemainingLabel && (
+                  <span className="ml-1">• {timeRemainingLabel} to expiry</span>
+                )}
+              </div>
+              {signal.yes_price !== undefined && signal.no_price !== undefined && (
+                <div className="text-xs">
+                  Market: YES {animatedYes.toFixed(2)} / NO {animatedNo.toFixed(2)}
+                </div>
+              )}
+            </div>
+
+            {/* Greeks Profile - only show when expanded */}
+            <GreeksProfile signal={signalWithGreeks} compact />
+          </div>
+
+          {/* Stats column */}
+          <div className="text-right ml-3 flex-shrink-0">
+            <div
+              className={`text-lg font-bold ${
+                evIsPositive ? "text-green-600" : "text-red-600"
+              }`}
+            >
+              {evIsPositive ? "+" : ""}
+              {(animatedEv * 100).toFixed(1)}% EV
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {(signal.edge_percentage * 100).toFixed(1)}% edge
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {(signal.confidence_score * 100).toFixed(0)}% confidence
+            </div>
+            {signal.model_probability !== undefined && (
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Model: {(signal.model_probability * 100).toFixed(1)}%
+              </div>
             )}
           </div>
-          {signal.yes_price !== undefined && signal.no_price !== undefined && (
-            <div className="text-xs">
-              Market: YES {animatedYes.toFixed(2)} / NO {animatedNo.toFixed(2)}
-            </div>
-          )}
         </div>
-
-        {/* Greeks Profile */}
-        <GreeksProfile signal={signalWithGreeks} compact />
-      </div>
-
-      {/* Stats column */}
-      <div className="text-right ml-3 flex-shrink-0">
-        <div
-          className={`text-lg font-bold ${
-            evIsPositive ? "text-green-600" : "text-red-600"
-          }`}
-        >
-          {evIsPositive ? "+" : ""}
-          {(animatedEv * 100).toFixed(1)}% EV
-        </div>
-        <div className="text-xs text-muted-foreground mt-0.5">
-          {(signal.edge_percentage * 100).toFixed(1)}% edge
-        </div>
-        <div className="text-xs text-muted-foreground mt-0.5">
-          {(signal.confidence_score * 100).toFixed(0)}% confidence
-        </div>
-        {signal.model_probability !== undefined && (
-          <div className="text-xs text-muted-foreground mt-0.5">
-            Model: {(signal.model_probability * 100).toFixed(1)}%
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

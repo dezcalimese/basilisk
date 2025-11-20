@@ -411,19 +411,20 @@ impl App {
                 Span::raw("  │  "),
                 Span::styled("[1] ", Style::default().fg(Color::Yellow)),
                 Span::raw("Signals  "),
+                Span::styled("[2] ", Style::default().fg(Color::Yellow)),
+                Span::raw("Hourly Stats  "),
+                Span::styled("[3] ", Style::default().fg(Color::Yellow)),
+                Span::raw("Vol Skew  "),
             ];
 
-            // Show [e] shortcut only in signals view
+            // Show [e] shortcut after numbered views
             if self.view_mode == ViewMode::Signals {
                 spans.push(Span::styled("[e] ", Style::default().fg(Color::Yellow)));
                 spans.push(Span::raw("Extreme  "));
             }
 
             spans.extend(vec![
-                Span::styled("[2] ", Style::default().fg(Color::Yellow)),
-                Span::raw("Hourly Stats  "),
-                Span::styled("[3] ", Style::default().fg(Color::Yellow)),
-                Span::raw("Vol Skew  │  "),
+                Span::raw("│  "),
                 Span::styled("[r] ", Style::default().fg(Color::Yellow)),
                 Span::raw("Refresh  "),
                 Span::styled("[h/?] ", Style::default().fg(Color::Yellow)),
