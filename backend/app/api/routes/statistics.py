@@ -7,13 +7,29 @@ from app.services.price_statistics import HourlyPriceStatistics
 from app.services.volatility_skew import VolatilitySkew
 from app.services.market_service import MarketService
 from app.data.bitcoin_client import BitcoinPriceClient
+from app.data.ethereum_client import EthereumPriceClient
+from app.data.ripple_client import RipplePriceClient
 
 router = APIRouter()
 
 
+def get_price_client(asset: str):
+    """Get the appropriate price client for the asset."""
+    asset_upper = asset.upper()
+    if asset_upper == "BTC":
+        return BitcoinPriceClient()
+    elif asset_upper == "ETH":
+        return EthereumPriceClient()
+    elif asset_upper == "XRP":
+        return RipplePriceClient()
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}. Supported: BTC, ETH, XRP")
+
+
 @router.get("/statistics/hourly-movements")
 async def get_hourly_movement_stats(
-    hours: int = Query(default=720, ge=24, le=2160, description="Hours of history to analyze (default 720 = 30 days)")
+    hours: int = Query(default=720, ge=24, le=2160, description="Hours of history to analyze (default 720 = 30 days)"),
+    asset: str = Query(default="btc", description="Asset to analyze (btc, eth, or xrp)")
 ) -> dict[str, Any]:
     """
     Return hourly price movement statistics.
@@ -21,14 +37,15 @@ async def get_hourly_movement_stats(
 
     Args:
         hours: Number of hours of historical data to analyze
+        asset: Asset to analyze (btc, eth, or xrp)
 
     Returns:
-        Statistical analysis of hourly BTC price movements
+        Statistical analysis of hourly price movements for the specified asset
     """
     try:
-        # Fetch historical candles
-        btc_client = BitcoinPriceClient()
-        candles = await btc_client.get_historical_candles(hours=hours)
+        # Get price client for selected asset
+        price_client = get_price_client(asset)
+        candles = await price_client.get_historical_candles(hours=hours)
 
         if not candles:
             raise HTTPException(
@@ -54,7 +71,8 @@ async def get_hourly_movement_stats(
 @router.get("/probability/next-hour/{strike}")
 async def get_next_hour_probability(
     strike: float,
-    lookback_hours: int = Query(default=720, ge=24, le=2160)
+    lookback_hours: int = Query(default=720, ge=24, le=2160),
+    asset: str = Query(default="btc", description="Asset to analyze (btc, eth, or xrp)")
 ) -> dict[str, Any]:
     """
     Probability that next hourly close will be above strike.
@@ -64,17 +82,18 @@ async def get_next_hour_probability(
     Args:
         strike: Strike price to analyze
         lookback_hours: Hours of historical data to use for probability calculation
+        asset: Asset to analyze (btc, eth, or xrp)
 
     Returns:
         Probability analysis and move requirements
     """
     try:
-        # Get current BTC price
-        btc_client = BitcoinPriceClient()
-        current_price = await btc_client.get_spot_price()
+        # Get price client for selected asset
+        price_client = get_price_client(asset)
+        current_price = await price_client.get_spot_price()
 
         # Get historical candles
-        candles = await btc_client.get_historical_candles(hours=lookback_hours)
+        candles = await price_client.get_historical_candles(hours=lookback_hours)
 
         if not candles:
             raise HTTPException(
@@ -105,23 +124,36 @@ async def get_next_hour_probability(
 
 
 @router.get("/volatility/skew")
-async def get_volatility_skew() -> dict[str, Any]:
+async def get_volatility_skew(
+    asset: str = Query(default="btc", description="Asset to analyze (btc, eth, or xrp)")
+) -> dict[str, Any]:
     """
     Calculate volatility skew from current contract prices.
 
     Analyzes implied volatility across different strike prices
     to identify market sentiment (fear vs greed).
 
+    Args:
+        asset: Asset to analyze (btc, eth, or xrp)
+
     Returns:
         Volatility skew analysis with IV curve data
     """
     try:
-        # Get current contracts and BTC price
+        # Get current contracts and price for selected asset
         market_service = MarketService()
-        btc_client = BitcoinPriceClient()
+        price_client = get_price_client(asset)
+        asset_upper = asset.upper()
 
-        # Fetch market data
-        market_data = await market_service.get_bitcoin_hourly_contracts()
+        # Fetch market data based on asset
+        if asset_upper == "BTC":
+            market_data = await market_service.get_bitcoin_hourly_contracts()
+        elif asset_upper == "ETH":
+            market_data = await market_service.get_ethereum_hourly_contracts()
+        elif asset_upper == "XRP":
+            market_data = await market_service.get_ripple_hourly_contracts()
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}")
 
         # Extract contracts and current price
         if isinstance(market_data, dict):
@@ -135,7 +167,7 @@ async def get_volatility_skew() -> dict[str, Any]:
                 detail="No active contracts available for skew calculation"
             )
 
-        current_price = await btc_client.get_spot_price()
+        current_price = await price_client.get_spot_price()
 
         # Calculate skew
         skew_service = VolatilitySkew()
@@ -154,7 +186,8 @@ async def get_volatility_skew() -> dict[str, Any]:
 
 @router.get("/statistics/extreme-moves")
 async def get_extreme_move_probabilities(
-    hours: int = Query(default=720, ge=24, le=2160, description="Hours of history to analyze")
+    hours: int = Query(default=720, ge=24, le=2160, description="Hours of history to analyze"),
+    asset: str = Query(default="btc", description="Asset to analyze (btc, eth, or xrp)")
 ) -> dict[str, Any]:
     """
     Calculate probability of EXTREME hourly price moves.
@@ -165,14 +198,15 @@ async def get_extreme_move_probabilities(
 
     Args:
         hours: Number of hours of historical data to analyze
+        asset: Asset to analyze (btc, eth, or xrp)
 
     Returns:
         Extreme move probabilities and volatility regime analysis
     """
     try:
-        # Fetch historical candles
-        btc_client = BitcoinPriceClient()
-        candles = await btc_client.get_historical_candles(hours=hours)
+        # Get price client for selected asset
+        price_client = get_price_client(asset)
+        candles = await price_client.get_historical_candles(hours=hours)
 
         if not candles:
             raise HTTPException(
@@ -198,26 +232,41 @@ async def get_extreme_move_probabilities(
 
 
 @router.get("/statistics/summary")
-async def get_statistics_summary() -> dict[str, Any]:
+async def get_statistics_summary(
+    asset: str = Query(default="btc", description="Asset to analyze (btc, eth, or xrp)")
+) -> dict[str, Any]:
     """
     Get a comprehensive summary of statistics including:
     - Hourly movement statistics
     - Volatility skew
     - Current market metrics
 
+    Args:
+        asset: Asset to analyze (btc, eth, or xrp)
+
     Returns:
         Comprehensive statistics summary
     """
     try:
-        btc_client = BitcoinPriceClient()
+        price_client = get_price_client(asset)
         market_service = MarketService()
         stats_service = HourlyPriceStatistics()
         skew_service = VolatilitySkew()
+        asset_upper = asset.upper()
 
-        # Fetch all data in parallel
-        current_price = await btc_client.get_spot_price()
-        candles = await btc_client.get_historical_candles(hours=720)
-        market_data = await market_service.get_bitcoin_hourly_contracts()
+        # Fetch all data
+        current_price = await price_client.get_spot_price()
+        candles = await price_client.get_historical_candles(hours=720)
+
+        # Fetch market data based on asset
+        if asset_upper == "BTC":
+            market_data = await market_service.get_bitcoin_hourly_contracts()
+        elif asset_upper == "ETH":
+            market_data = await market_service.get_ethereum_hourly_contracts()
+        elif asset_upper == "XRP":
+            market_data = await market_service.get_ripple_hourly_contracts()
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}")
 
         # Calculate statistics
         hourly_stats = stats_service.calculate_hourly_stats(candles, lookback_hours=720)
@@ -231,6 +280,7 @@ async def get_statistics_summary() -> dict[str, Any]:
         skew_data = skew_service.calculate_skew(contracts, current_price) if contracts else {}
 
         return {
+            "asset": asset_upper,
             "current_price": current_price,
             "hourly_statistics": {
                 "mean_return": hourly_stats.get("mean_return"),
@@ -253,6 +303,8 @@ async def get_statistics_summary() -> dict[str, Any]:
             },
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500,

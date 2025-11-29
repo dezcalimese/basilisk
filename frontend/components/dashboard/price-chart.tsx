@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useMemo } from "react";
 import { createChart, ColorType, IChartApi, ISeriesApi } from "lightweight-charts";
-import { useRealtimeStore } from "@/lib/stores/realtime-store";
+import { useRealtimeStore, useMultiAssetStore } from "@/lib/stores/multi-asset-store";
 import type { TradeSignal } from "@/lib/api";
 import {
   calculateRSI,
@@ -30,10 +30,9 @@ export function PriceChart({ signals = [], height = 400 }: PriceChartProps) {
   //   new Set(['rsi']) // RSI enabled by default
   // );
 
-  // Subscribe to candle data from store
-  const candles = useRealtimeStore((state) => state.candles);
-  const lastCandle = useRealtimeStore((state) => state.lastCandle);
-  const sseCurrentPrice = useRealtimeStore((state) => state.currentPrice);
+  // Subscribe to selected asset and candle data from store
+  const selectedAsset = useMultiAssetStore((state) => state.selectedAsset);
+  const { candles, lastCandle, currentPrice: sseCurrentPrice } = useRealtimeStore();
 
   // Calculate indicators
   // TODO: Re-enable when chart display issues are fixed
@@ -383,7 +382,7 @@ export function PriceChart({ signals = [], height = 400 }: PriceChartProps) {
     return (
       <div className="glass-card p-4">
         <div className="mb-3">
-          <h3 className="text-lg font-semibold">BTC/USD Price</h3>
+          <h3 className="text-lg font-semibold">{selectedAsset}/USD Price</h3>
           <p className="text-xs text-muted-foreground mt-1">
             1-minute candles • Binance spot price
           </p>
@@ -447,7 +446,7 @@ export function PriceChart({ signals = [], height = 400 }: PriceChartProps) {
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm text-muted-foreground">BTC/USD • Binance</h3>
+            <h3 className="text-sm text-muted-foreground">{selectedAsset}/USD • Binance</h3>
             <button
               onClick={() => setShowInfo(!showInfo)}
               className="text-muted-foreground hover:text-foreground transition-colors"
@@ -475,7 +474,7 @@ export function PriceChart({ signals = [], height = 400 }: PriceChartProps) {
           <div className="mt-2 p-3 bg-muted/50 rounded-lg text-xs text-muted-foreground space-y-1">
             <p className="font-medium mb-1">Chart Elements:</p>
             <p>• <span className="text-green-500">Green/Red candles</span> - Price movement (1-min intervals)</p>
-            <p>• <span className="text-blue-500">Blue dotted line</span> - Current BTC price (real-time)</p>
+            <p>• <span className="text-blue-500">Blue dotted line</span> - Current {selectedAsset} price (real-time)</p>
             <p>• <span className="text-green-500">Green</span>/<span className="text-red-500">Red dashed lines</span> - Strike prices (thicker line = highest EV)</p>
             <p className="text-xs opacity-75 mt-2">Updates every 10 seconds via multi-exchange data</p>
           </div>

@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import { useMultiAssetStore } from "@/lib/stores/multi-asset-store";
 
 interface VolSkewData {
   atm_iv: number;
@@ -47,10 +48,14 @@ export function VolatilitySkewChart({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Subscribe to selected asset
+  const selectedAsset = useMultiAssetStore((state) => state.selectedAsset);
+
   useEffect(() => {
     const fetchSkew = async () => {
       try {
-        const response = await fetch(`${apiUrl}/api/v1/volatility/skew`);
+        setLoading(true);
+        const response = await fetch(`${apiUrl}/api/v1/volatility/skew?asset=${selectedAsset.toLowerCase()}`);
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -69,7 +74,7 @@ export function VolatilitySkewChart({
     const interval = setInterval(fetchSkew, refreshInterval);
 
     return () => clearInterval(interval);
-  }, [apiUrl, refreshInterval]);
+  }, [apiUrl, refreshInterval, selectedAsset]);
 
   if (loading) {
     return (
@@ -108,7 +113,7 @@ export function VolatilitySkewChart({
     <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
       {/* Header */}
       <div className="mb-6">
-        <h3 className="text-lg font-semibold">Volatility Skew</h3>
+        <h3 className="text-lg font-semibold">{selectedAsset} Volatility Skew</h3>
         <p className="text-sm text-muted-foreground">
           {skewData.skew_interpretation}
         </p>
@@ -193,13 +198,13 @@ export function VolatilitySkewChart({
             <>
               Lower strikes (YES at low levels) are more expensive than higher strikes.
               Market is pricing in downside risk (fear). If you disagree, buy YES on
-              higher strikes (bet BTC rises).
+              higher strikes (bet {selectedAsset} rises).
             </>
           ) : skewData.skew < -0.1 ? (
             <>
               Higher strikes (YES at high levels) are more expensive than lower strikes.
               Market expects strong upside (greed). If you disagree, buy YES on lower
-              strikes (bet BTC stays lower).
+              strikes (bet {selectedAsset} stays lower).
             </>
           ) : (
             <>

@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import { useMultiAssetStore } from "@/lib/stores/multi-asset-store";
 
 interface HourlyStats {
   mean_return: number;
@@ -57,12 +58,16 @@ export function HourlyStatsWidget({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Subscribe to selected asset
+  const selectedAsset = useMultiAssetStore((state) => state.selectedAsset);
+
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        // Fetch hourly statistics
+        setLoading(true);
+        // Fetch hourly statistics for selected asset
         const statsResponse = await fetch(
-          `${apiUrl}/api/v1/statistics/hourly-movements?hours=720`
+          `${apiUrl}/api/v1/statistics/hourly-movements?hours=720&asset=${selectedAsset.toLowerCase()}`
         );
         if (!statsResponse.ok) {
           throw new Error(`HTTP ${statsResponse.status}`);
@@ -70,9 +75,9 @@ export function HourlyStatsWidget({
         const statsData = await statsResponse.json();
         setStats(statsData);
 
-        // Fetch extreme move probabilities
+        // Fetch extreme move probabilities for selected asset
         const extremeResponse = await fetch(
-          `${apiUrl}/api/v1/statistics/extreme-moves?hours=720`
+          `${apiUrl}/api/v1/statistics/extreme-moves?hours=720&asset=${selectedAsset.toLowerCase()}`
         );
         if (extremeResponse.ok) {
           const extremeMovesData = await extremeResponse.json();
@@ -92,7 +97,7 @@ export function HourlyStatsWidget({
     const interval = setInterval(fetchStats, refreshInterval);
 
     return () => clearInterval(interval);
-  }, [apiUrl, refreshInterval]);
+  }, [apiUrl, refreshInterval, selectedAsset]);
 
   if (loading) {
     return (
@@ -132,7 +137,7 @@ export function HourlyStatsWidget({
     <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
       {/* Header */}
       <div className="mb-6 flex-shrink-0">
-        <h3 className="text-lg font-semibold">Hourly Movement Statistics</h3>
+        <h3 className="text-lg font-semibold">{selectedAsset} Hourly Movement Statistics</h3>
         <p className="text-sm text-muted-foreground">
           Last 30 days • {stats.total_samples} samples
         </p>
