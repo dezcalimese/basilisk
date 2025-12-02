@@ -7,6 +7,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import candles, current, health, orderbook, signals, statistics
+from app.core.cache import get_redis_client, close_redis_client
+from app.core.http_client import get_http_client, close_http_client
 from app.core.config import settings
 from app.db.database import init_db
 
@@ -16,9 +18,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan events."""
     # Startup
     await init_db()
+    await get_redis_client()  # Initialize Redis connection
+    await get_http_client()  # Initialize HTTP client with connection pooling
     yield
     # Shutdown
-    pass
+    await close_http_client()  # Close HTTP client
+    await close_redis_client()  # Close Redis connection
 
 
 app = FastAPI(

@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
 from app.core.config import settings
+from app.core.http_client import get_http_client
 
 
 class KalshiClient:
@@ -46,23 +47,23 @@ class KalshiClient:
             Market data from Kalshi API
         """
         path = "/markets"
-        async with httpx.AsyncClient() as client:
-            params = {"limit": min(limit, 1000)}
-            if event_ticker:
-                params["event_ticker"] = event_ticker
-            if series_ticker:
-                params["series_ticker"] = series_ticker
-            if cursor:
-                params["cursor"] = cursor
+        client = await get_http_client()
+        params = {"limit": min(limit, 1000)}
+        if event_ticker:
+            params["event_ticker"] = event_ticker
+        if series_ticker:
+            params["series_ticker"] = series_ticker
+        if cursor:
+            params["cursor"] = cursor
 
-            response = await client.get(
-                f"{self.base_url}{path}",
-                params=params,
-                headers=self._get_auth_headers(method="GET", path=path),
-                timeout=30.0,
-            )
-            response.raise_for_status()
-            return response.json()
+        response = await client.get(
+            f"{self.base_url}{path}",
+            params=params,
+            headers=self._get_auth_headers(method="GET", path=path),
+            timeout=30.0,
+        )
+        response.raise_for_status()
+        return response.json()
 
     async def get_market_orderbook(self, ticker: str) -> dict[str, Any]:
         """
@@ -75,14 +76,14 @@ class KalshiClient:
             Orderbook data with bids and asks
         """
         path = f"/markets/{ticker}/orderbook"
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{self.base_url}{path}",
-                headers=self._get_auth_headers(method="GET", path=path),
-                timeout=30.0,
-            )
-            response.raise_for_status()
-            return response.json()
+        client = await get_http_client()
+        response = await client.get(
+            f"{self.base_url}{path}",
+            headers=self._get_auth_headers(method="GET", path=path),
+            timeout=30.0,
+        )
+        response.raise_for_status()
+        return response.json()
 
     def _load_private_key(self, key_path: str) -> Any:
         """

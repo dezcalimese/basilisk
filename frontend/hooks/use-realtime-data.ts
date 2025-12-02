@@ -1,26 +1,33 @@
 import { useEffect } from 'react';
-import sseManager from '@/lib/sse-manager';
+import multiAssetSSEManager from '@/lib/sse-multi-asset-manager';
 import exchangeAPI from '@/lib/exchange-api';
+import { useMultiAssetStore, type Asset } from '@/lib/stores/multi-asset-store';
 
 /**
- * React hook for consuming real-time trading data via SSE and Exchange REST API
+ * React hook for consuming real-time multi-asset trading data via SSE
  *
- * Uses global managers that persist across React re-renders
- * to prevent hot-reload from breaking connections in development.
- *
- * Note: Uses multi-exchange data via backend proxy with automatic fallback.
- * Backend uses CCXT to try multiple exchanges (Kraken, Coinbase, etc.)
- * Falls back to CoinGecko if all exchanges fail.
+ * Supports BTC, ETH, and XRP with on-demand streaming:
+ * - Connects immediately to selected asset
+ * - Keeps connection to last-viewed asset for 60s
+ * - Disconnects idle assets after grace period
  *
  * Usage:
  * ```tsx
  * function Dashboard() {
  *   useRealtimeData();
  *
- *   const currentPrice = useRealtimeStore((state) => state.currentPrice);
- *   const signals = useAnalyticalStore((state) => state.signals);
+ *   const selectedAsset = useMultiAssetStore((state) => state.selectedAsset);
+ *   const selectAsset = useMultiAssetStore((state) => state.selectAsset);
+ *   const currentPrice = useMultiAssetStore((state) => state.getCurrentPrice());
  *
- *   return <div>Current BTC: ${currentPrice}</div>;
+ *   return (
+ *     <div>
+ *       <button onClick={() => selectAsset('BTC')}>BTC</button>
+ *       <button onClick={() => selectAsset('ETH')}>ETH</button>
+ *       <button onClick={() => selectAsset('XRP')}>XRP</button>
+ *       <div>Current {selectedAsset}: ${currentPrice}</div>
+ *     </div>
+ *   );
  * }
  * ```
  */
@@ -45,16 +52,19 @@ export function useRealtimeData(options: UseRealtimeDataOptions = {}) {
     autoConnect = true,
   } = options;
 
+  const selectedAsset = useMultiAssetStore((state) => state.selectedAsset);
+
   useEffect(() => {
     if (!autoConnect) {
       return;
     }
 
-    const url = `${baseUrl}/api/v1/stream/trading`;
+    // Set base URL for multi-asset manager
+    multiAssetSSEManager.setBaseUrl(baseUrl);
 
-    // Connect to backend SSE for signals and volatility
-    console.log('[useRealtimeData] Requesting SSE connection');
-    sseManager.connect(url);
+    // Connect to selected asset immediately
+    console.log(`[useRealtimeData] Connecting to ${selectedAsset} stream`);
+    multiAssetSSEManager.connectAsset(selectedAsset);
 
     // Start Exchange API polling for candles (via backend proxy)
     console.log('[useRealtimeData] Starting Exchange API polling via backend');
@@ -69,34 +79,50 @@ export function useRealtimeData(options: UseRealtimeDataOptions = {}) {
     };
   }, [baseUrl, autoConnect]);
 
+  // Watch for asset changes and switch connections
+  useEffect(() => {
+    if (!autoConnect) {
+      return;
+    }
+
+    console.log(`[useRealtimeData] Asset changed to ${selectedAsset}`);
+    multiAssetSSEManager.switchAsset(selectedAsset);
+  }, [selectedAsset, autoConnect]);
+
   return {
     /**
-     * Manually reconnect to SSE stream
+     * Manually reconnect to current asset's SSE stream
      */
     reconnect: () => {
-      const url = `${baseUrl}/api/v1/stream/trading`;
-      sseManager.disconnect();
-      sseManager.connect(url);
+      multiAssetSSEManager.disconnectAsset(selectedAsset);
+      multiAssetSSEManager.connectAsset(selectedAsset);
       exchangeAPI.stopPolling();
       exchangeAPI.startPolling();
     },
 
     /**
-     * Check if currently connected
+     * Check if currently connected to selected asset
      */
-    isConnected: () => sseManager.isConnected() && exchangeAPI.getIsPolling(),
+    isConnected: () => multiAssetSSEManager.isConnected(selectedAsset) && exchangeAPI.getIsPolling(),
 
     /**
-     * Get current connection state
+     * Get current connection state for selected asset
      */
-    getReadyState: () => sseManager.getReadyState(),
+    getReadyState: () => multiAssetSSEManager.getReadyState(selectedAsset),
 
     /**
-     * Manually disconnect (use sparingly)
+     * Manually disconnect all assets (use sparingly)
      */
     disconnect: () => {
-      sseManager.disconnect();
+      multiAssetSSEManager.disconnectAll();
       exchangeAPI.stopPolling();
+    },
+
+    /**
+     * Switch to a different asset
+     */
+    switchAsset: (asset: Asset) => {
+      useMultiAssetStore.getState().selectAsset(asset);
     },
   };
 }

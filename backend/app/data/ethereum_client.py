@@ -1,36 +1,36 @@
-"""Bitcoin price data client."""
+"""Ethereum price data client."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 
-from app.core.config import settings
 from app.core.http_client import get_http_client
 
 
-class BitcoinPriceClient:
-    """Client for fetching Bitcoin spot prices and historical data."""
+class EthereumPriceClient:
+    """Client for fetching Ethereum spot prices and historical data."""
 
     def __init__(self) -> None:
-        """Initialize Bitcoin price client."""
-        self.api_url = settings.bitcoin_price_api_url
+        """Initialize Ethereum price client."""
+        # Coinbase API for spot price
+        self.api_url = "https://api.coinbase.com/v2/prices/ETH-USD/spot"
         # Use Binance.US for US-based requests (Binance.com geo-blocks US traffic)
         self.candles_url = "https://api.binance.us/api/v3/klines"
 
     async def get_spot_price(self) -> float:
         """
-        Fetch current Bitcoin spot price in USD.
+        Fetch current Ethereum spot price in USD.
 
         Returns:
-            Current BTC price in USD
+            Current ETH price in USD
         """
         client = await get_http_client()
         response = await client.get(self.api_url, timeout=10.0)
         response.raise_for_status()
         data: dict[str, Any] = response.json()
 
-        # Coinbase API format: {"data": {"amount": "67890.12"}}
+        # Coinbase API format: {"data": {"amount": "3456.78"}}
         price_str = data["data"]["amount"]
         return float(price_str)
 
@@ -65,7 +65,7 @@ class BitcoinPriceClient:
         max_hours = min(hours, 1000)
 
         params = {
-            "symbol": "BTCUSDT",  # BTC/USDT pair
+            "symbol": "ETHUSDT",  # ETH/USDT pair
             "interval": "1h",  # 1 hour candles
             "limit": max_hours,  # Number of candles to return
         }
@@ -95,7 +95,6 @@ class BitcoinPriceClient:
             )
 
         # Binance returns data in ascending order (oldest to newest)
-        # No need to sort, but keeping for consistency
         candles.sort(key=lambda x: x["timestamp"])
 
         return candles

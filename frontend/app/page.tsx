@@ -7,6 +7,7 @@ import { AnimatedPrice } from "@/components/dashboard/animated-price";
 import { HelpDialog } from "@/components/help-dialog";
 import { CalculatorDialog } from "@/components/calculator-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { AssetSelector } from "@/components/asset-selector";
 import { VolatilitySurface3D } from "@/components/dashboard/volatility-surface-3d";
 import { PriceChart } from "@/components/dashboard/price-chart";
 import { ConnectionStatus } from "@/components/connection-status";
@@ -15,8 +16,7 @@ import { VolatilitySkewChart } from "@/components/dashboard/volatility-skew-char
 import { ExtremeOpportunitiesWidget } from "@/components/dashboard/extreme-opportunities";
 import { OrderBookDepth } from "@/components/dashboard/order-book-depth";
 import { useRealtimeData } from "@/hooks/use-realtime-data";
-import { useRealtimeStore } from "@/lib/stores/realtime-store";
-import { useAnalyticalStore } from "@/lib/stores/analytical-store";
+import { useMultiAssetStore, useRealtimeStore, useAnalyticalStore } from "@/lib/stores/multi-asset-store";
 
 export default function Home() {
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -28,11 +28,12 @@ export default function Home() {
   });
 
   // Subscribe to stores
-  const currentBtcPrice = useRealtimeStore((state) => state.currentPrice);
-  const connectionState = useRealtimeStore((state) => state.connectionState);
-  const signals = useAnalyticalStore((state) => state.signals);
-  const volatility = useAnalyticalStore((state) => state.volatility);
-  const signalsError = useAnalyticalStore((state) => state.signalsError);
+  const selectedAsset = useMultiAssetStore((state) => state.selectedAsset);
+  const currentBtcPrice = useRealtimeStore().currentPrice;
+  const connectionState = useRealtimeStore().connectionState;
+  const signals = useAnalyticalStore().signals;
+  const volatility = useAnalyticalStore().volatility;
+  const signalsError = useAnalyticalStore().signalsError;
 
   // Update time every second for countdown
   useEffect(() => {
@@ -86,11 +87,12 @@ export default function Home() {
       <header className="glass-header sticky top-0 z-40">
         <div className="container mx-auto px-4 py-3">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 sm:gap-4">
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold">Basilisk</h1>
                 <p className="text-muted-foreground text-xs sm:text-sm hidden sm:block">A serpent's eye for mispriced markets</p>
               </div>
+              <AssetSelector />
               <ConnectionStatus showLabel={false} showError={false} />
             </div>
             <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
@@ -102,7 +104,7 @@ export default function Home() {
                 {currentBtcPrice > 0 && (
                   <div className="flex items-center justify-end gap-2">
                     <AnimatedPrice price={currentBtcPrice} decimals={2} />
-                    <span className="text-xs sm:text-sm text-muted-foreground">BTC</span>
+                    <span className="text-xs sm:text-sm text-muted-foreground">{selectedAsset}</span>
                   </div>
                 )}
                 {nextExpiry && (
