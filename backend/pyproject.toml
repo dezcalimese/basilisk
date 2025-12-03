@@ -25,6 +25,8 @@ dependencies = [
     "sse-starlette>=2.1.0",
     "ccxt>=4.5.18",
     "redis>=7.1.0",
+    "python-telegram-bot>=20.0",
+    "aioapns>=3.0",
 ]
 
 [project.optional-dependencies]

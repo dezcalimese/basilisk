@@ -46,5 +46,24 @@ class Settings(BaseSettings):
     # Trading fees (Kalshi)
     kalshi_fee_rate: float = 0.07  # 7% fee on profits
 
+    # Kalshi Builder Code (for revenue sharing)
+    kalshi_builder_code: str = ""
+
+    # Telegram Bot
+    telegram_bot_token: str = ""
+    telegram_webhook_secret: str = ""
+
+    # Apple Push Notifications
+    apns_key_id: str = ""
+    apns_team_id: str = ""
+    apns_key_path: str = ""
+    apns_bundle_id: str = ""
+
+    # Encryption (for storing user API keys)
+    encryption_key: str = ""
+
+    # Redis
+    redis_url: str = "redis://localhost:6379"
+
 
 settings = Settings()

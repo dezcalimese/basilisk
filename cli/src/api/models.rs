@@ -178,3 +178,109 @@ impl Contract {
         }
     }
 }
+
+// ============================================
+// Trading Models
+// ============================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TradeRequest {
+    pub ticker: String,
+    pub asset: String,
+    pub direction: String,
+    pub strike: f64,
+    pub contracts: i32,
+    pub order_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit_price: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signal_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignalTradeRequest {
+    pub signal_id: i32,
+    pub contracts: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TradeResponse {
+    pub success: bool,
+    pub trade_id: Option<i32>,
+    pub order_id: Option<String>,
+    pub client_order_id: Option<String>,
+    pub filled: i32,
+    pub price: Option<f64>,
+    pub cost: Option<f64>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Position {
+    pub trade_id: i32,
+    pub ticker: String,
+    pub asset: String,
+    pub direction: String,
+    pub strike: f64,
+    pub contracts: i32,
+    pub entry_price: f64,
+    pub current_price: Option<f64>,
+    pub unrealized_pnl: Option<f64>,
+    pub status: String,
+    pub expiry_at: Option<String>,
+    pub opened_at: String,
+}
+
+impl Position {
+    pub fn pnl_display(&self) -> String {
+        match self.unrealized_pnl {
+            Some(pnl) => format!("${:+.2}", pnl),
+            None => "N/A".to_string(),
+        }
+    }
+
+    pub fn current_price_display(&self) -> String {
+        match self.current_price {
+            Some(price) => format!("${:.2}", price),
+            None => "N/A".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TradeHistory {
+    pub id: i32,
+    pub ticker: String,
+    pub asset: String,
+    pub direction: String,
+    pub strike: f64,
+    pub contracts: i32,
+    pub entry_price: f64,
+    pub exit_price: Option<f64>,
+    pub fees: Option<f64>,
+    pub pnl: Option<f64>,
+    pub status: String,
+    pub opened_at: String,
+    pub closed_at: Option<String>,
+}
+
+impl TradeHistory {
+    pub fn pnl_display(&self) -> String {
+        match self.pnl {
+            Some(pnl) => format!("${:+.2}", pnl),
+            None => "N/A".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PnLSummary {
+    pub period: String,
+    pub total_pnl: f64,
+    pub total_fees: f64,
+    pub net_pnl: f64,
+    pub trade_count: i32,
+    pub wins: i32,
+    pub losses: i32,
+    pub win_rate: f64,
+}

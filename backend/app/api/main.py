@@ -6,7 +6,7 @@ from typing import AsyncGenerator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import candles, current, health, orderbook, signals, statistics
+from app.api.routes import candles, current, health, mobile, orderbook, signals, statistics, trading, webhooks
 from app.core.cache import get_redis_client, close_redis_client
 from app.core.http_client import get_http_client, close_http_client
 from app.core.config import settings
@@ -49,6 +49,9 @@ app.include_router(current.router, prefix=settings.api_v1_prefix, tags=["current
 app.include_router(candles.router, prefix=settings.api_v1_prefix, tags=["candles"])
 app.include_router(statistics.router, prefix=settings.api_v1_prefix, tags=["statistics"])
 app.include_router(orderbook.router, prefix=settings.api_v1_prefix, tags=["orderbook"])
+app.include_router(trading.router, prefix=settings.api_v1_prefix, tags=["trading"])
+app.include_router(mobile.router, prefix=settings.api_v1_prefix, tags=["mobile"])
+app.include_router(webhooks.router, prefix=settings.api_v1_prefix, tags=["webhooks"])
 
 
 @app.get("/")
