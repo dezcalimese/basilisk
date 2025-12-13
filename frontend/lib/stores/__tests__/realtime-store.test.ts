@@ -17,7 +17,7 @@ describe('Realtime Store', () => {
     it('should update current price', () => {
       const { setCurrentPrice } = useRealtimeStore.getState();
 
-      setCurrentPrice(95000);
+      setCurrentPrice(95000, '2024-01-01T12:00:00Z');
 
       expect(useRealtimeStore.getState().currentPrice).toBe(95000);
     });
@@ -25,7 +25,7 @@ describe('Realtime Store', () => {
     it('should handle zero price', () => {
       const { setCurrentPrice } = useRealtimeStore.getState();
 
-      setCurrentPrice(0);
+      setCurrentPrice(0, '2024-01-01T12:00:00Z');
 
       expect(useRealtimeStore.getState().currentPrice).toBe(0);
     });

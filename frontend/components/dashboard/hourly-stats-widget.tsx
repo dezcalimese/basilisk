@@ -103,8 +103,24 @@ export function HourlyStatsWidget({
     return (
       <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
         <h3 className="text-lg font-semibold mb-4 flex-shrink-0">Hourly Movement Statistics</h3>
-        <div className="flex items-center justify-center flex-1">
-          <p className="text-muted-foreground">Loading statistics...</p>
+        <div className="flex-1 space-y-4">
+          {/* Skeleton chart area */}
+          <div className="h-48 bg-muted/20 rounded-lg animate-pulse" />
+          {/* Skeleton stats row */}
+          <div className="grid grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="space-y-2">
+                <div className="h-3 w-20 bg-muted/30 rounded animate-pulse" />
+                <div className="h-6 w-16 bg-muted/40 rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
+          {/* Skeleton bottom row */}
+          <div className="grid grid-cols-4 gap-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-16 bg-muted/20 rounded-lg animate-pulse" />
+            ))}
+          </div>
         </div>
       </div>
     );

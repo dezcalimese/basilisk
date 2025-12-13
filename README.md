@@ -92,11 +92,13 @@ cargo build --release
 ### Analytics Dashboard
 - Real-time SSE streaming for prices and contracts
 - Multi-asset support (BTC, ETH, XRP)
+- **Trading modal** with Kalshi-style UI (Buy/Sell, Yes/No, Limit orders)
 - 3D volatility surface visualization
 - Binary options Greeks (Delta, Gamma, Vega, Theta, Rho)
 - Volatility regime detection (CALM/NORMAL/ELEVATED/CRISIS)
 - Order book depth charts
 - Probability ladder
+- **Iconify icons** (277K+ icons via Tailwind CSS 4 plugin)
 
 ### Trade Execution
 - Market and limit orders via Kalshi API

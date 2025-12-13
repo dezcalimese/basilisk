@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
 from app.core.config import settings
-from app.core.http_client import get_http_client
+from app.core.http_client import get_http_client, rate_limited_request
 
 
 class OrderSide(str, Enum):
@@ -80,7 +80,6 @@ class KalshiClient:
             Market data from Kalshi API
         """
         path = "/markets"
-        client = await get_http_client()
         params = {"limit": min(limit, 1000)}
         if event_ticker:
             params["event_ticker"] = event_ticker
@@ -89,7 +88,8 @@ class KalshiClient:
         if cursor:
             params["cursor"] = cursor
 
-        response = await client.get(
+        response = await rate_limited_request(
+            "GET",
             f"{self.base_url}{path}",
             params=params,
             headers=self._get_auth_headers(method="GET", path=path),
@@ -109,8 +109,8 @@ class KalshiClient:
             Orderbook data with bids and asks
         """
         path = f"/markets/{ticker}/orderbook"
-        client = await get_http_client()
-        response = await client.get(
+        response = await rate_limited_request(
+            "GET",
             f"{self.base_url}{path}",
             headers=self._get_auth_headers(method="GET", path=path),
             timeout=30.0,

@@ -70,7 +70,15 @@ export function OrderBookDepth({
     return (
       <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
         <h2 className="text-lg font-bold mb-3">Order Book Depth</h2>
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <div className="flex-1 space-y-2">
+          {/* Skeleton order book rows */}
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="flex gap-2">
+              <div className="flex-1 h-6 bg-muted/30 rounded animate-pulse" style={{ opacity: 1 - i * 0.12 }} />
+              <div className="w-16 h-6 bg-muted/30 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

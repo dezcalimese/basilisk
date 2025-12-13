@@ -4,7 +4,7 @@
  * Trade signals list component
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { useAnalyticalStore } from "@/lib/stores/analytical-store";
 import type { TradeSignal } from "@/lib/api";
 import { GreeksProfile, calculateGreeksForSignal } from "@/components/dashboard/greeks-profile";
+import { TradeModal, type TradeOrder } from "@/components/trading/trade-modal";
 
 interface SignalListProps {
   signals: TradeSignal[];
@@ -115,8 +116,23 @@ function parseTickerInfo(ticker: string, expiryTime?: string) {
 }
 
 export function SignalList({ signals, currentTime, selectedTicker, onSelectSignal }: SignalListProps) {
+  // Trade modal state
+  const [tradeModalOpen, setTradeModalOpen] = useState(false);
+  const [selectedSignalForTrade, setSelectedSignalForTrade] = useState<TradeSignal | null>(null);
+
   // Filter out HOLD signals - only show actionable trades
   const actionableSignals = signals.filter(signal => signal.signal_type !== "HOLD");
+
+  const handleOpenTradeModal = (signal: TradeSignal) => {
+    setSelectedSignalForTrade(signal);
+    setTradeModalOpen(true);
+  };
+
+  const handleTradeSubmit = (order: TradeOrder) => {
+    console.log("Trade order submitted:", order);
+    // TODO: Integrate with Kalshi API to place the order
+    setTradeModalOpen(false);
+  };
 
   if (actionableSignals.length === 0) {
     return (
@@ -140,9 +156,18 @@ export function SignalList({ signals, currentTime, selectedTicker, onSelectSigna
             currentTime={currentTime}
             isSelected={selectedTicker === signal.ticker}
             onSelect={() => onSelectSignal?.(signal.ticker)}
+            onTrade={() => handleOpenTradeModal(signal)}
           />
         ))}
       </div>
+
+      {/* Trade Modal */}
+      <TradeModal
+        signal={selectedSignalForTrade}
+        isOpen={tradeModalOpen}
+        onClose={() => setTradeModalOpen(false)}
+        onSubmit={handleTradeSubmit}
+      />
     </div>
   );
 }
@@ -152,9 +177,10 @@ interface SignalRowProps {
   currentTime: number;
   isSelected?: boolean;
   onSelect?: () => void;
+  onTrade?: () => void;
 }
 
-function SignalRow({ signal, currentTime, isSelected, onSelect }: SignalRowProps) {
+function SignalRow({ signal, currentTime, isSelected, onSelect, onTrade }: SignalRowProps) {
   const tickerInfo = parseTickerInfo(signal.ticker, signal.expiry_time);
   const animatedEv = useAnimatedNumber(signal.expected_value ?? 0, 500);
   const animatedYes = useAnimatedNumber(signal.yes_price ?? 0, 500);
@@ -226,6 +252,7 @@ function SignalRow({ signal, currentTime, isSelected, onSelect }: SignalRowProps
         </div>
       ) : (
         /* Expanded view for selected signal */
+        <>
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
             {/* Readable expiry date/time */}
@@ -304,6 +331,18 @@ function SignalRow({ signal, currentTime, isSelected, onSelect }: SignalRowProps
             )}
           </div>
         </div>
+
+        {/* Trade Button - Full width at bottom */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onTrade?.();
+          }}
+          className="mt-3 w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors"
+        >
+          Trade This Signal
+        </button>
+        </>
       )}
     </div>
   );

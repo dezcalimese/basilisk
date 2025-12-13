@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2025-12-10] - Trading Modal & API Resilience
+
+### Added
+- **Trading Modal Component**
+  - Kalshi-style trade modal with Buy/Sell tabs
+  - Yes/No side selection with live prices
+  - Dollars, Contracts, and Limit order modes
+  - Bottom sheet on mobile, centered modal on desktop
+  - Expected value and model probability display
+  - Integrated into signal list with "Trade This Signal" button
+
+- **API Rate Limiting & Resilience**
+  - HTTP client singleton with connection pooling
+  - Rate limiting (100ms between requests) for Kalshi API
+  - Exponential backoff retry logic for 429 errors
+  - Reduced order book fetching during initial contract scan
+
+- **Iconify Integration** (Frontend)
+  - Installed @iconify/tailwind4 and @iconify-json/lucide
+  - 277K+ icons available with zero runtime overhead
+  - Tailwind CSS 4 plugin for SSR-friendly icon rendering
+
+### Changed
+- Trade signals now have clickable expanded view with Trade button
+- Optimized Kalshi API calls to avoid rate limiting
+- Signal list uses shared TradeSignal type from api.ts
+
+### Fixed
+- Rate limiting errors (429) when fetching Kalshi markets
+- Type compatibility between trade modal and signal components
+
 ## [2025-11-17] - Branding Update
 
 ### Changed

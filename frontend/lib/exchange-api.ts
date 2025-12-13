@@ -15,13 +15,13 @@
  * - More reliable than direct browser-to-exchange calls
  */
 
-import { useRealtimeStore, CandleData } from './stores/realtime-store';
+import { useMultiAssetStore, type CandleData, type Asset } from './stores/multi-asset-store';
 
 class ExchangeAPIClient {
   private pollTimer: NodeJS.Timeout | null = null;
   private isPolling = false;
   private interval = '1m'; // 1 minute candles
-  private lastCandleTimestamp = 0;
+  private lastCandleTimestamp: Record<Asset, number> = { BTC: 0, ETH: 0, XRP: 0 };
   private consecutiveErrors = 0;
   private maxRetries = 3;
   private baseUrl: string;
@@ -53,11 +53,15 @@ class ExchangeAPIClient {
   }
 
   /**
-   * Fetch candle data from backend endpoint
+   * Fetch candle data from backend endpoint for the selected asset
    */
   private async fetchCandles(): Promise<void> {
+    const store = useMultiAssetStore.getState();
+    const asset = store.selectedAsset;
+    const symbol = asset === 'BTC' ? 'btcusd' : asset === 'ETH' ? 'ethusd' : 'xrpusd';
+
     try {
-      const url = `${this.baseUrl}/api/v1/candles/btcusd?interval=${this.interval}&limit=500`;
+      const url = `${this.baseUrl}/api/v1/candles/${symbol}?interval=${this.interval}&limit=500`;
 
       const response = await fetch(url, {
         method: 'GET',
@@ -74,7 +78,7 @@ class ExchangeAPIClient {
       const candles = await response.json();
 
       if (!candles || candles.length === 0) {
-        console.warn('[Exchange API] No candle data received');
+        console.warn(`[Exchange API] No candle data received for ${asset}`);
         return;
       }
 
@@ -93,40 +97,41 @@ class ExchangeAPIClient {
         isClosed: true,
       }));
 
-      // Filter out candles we've already processed
+      // Filter out candles we've already processed for this asset
+      const lastTimestamp = this.lastCandleTimestamp[asset];
       const newCandles = convertedCandles.filter(
-        (candle) => candle.timestamp > this.lastCandleTimestamp
+        (candle) => candle.timestamp > lastTimestamp
       );
 
       if (newCandles.length > 0) {
         // On first fetch, set all candles
-        if (this.lastCandleTimestamp === 0) {
-          console.log(`[Exchange API] ✓ Loaded ${convertedCandles.length} historical candles`);
+        if (lastTimestamp === 0) {
+          console.log(`[Exchange API] ✓ Loaded ${convertedCandles.length} historical candles for ${asset}`);
           console.log(`[Exchange API] First candle:`, convertedCandles[0]);
           console.log(`[Exchange API] Last candle:`, convertedCandles[convertedCandles.length - 1]);
-          useRealtimeStore.getState().setCandles(convertedCandles);
-          this.lastCandleTimestamp = convertedCandles[convertedCandles.length - 1].timestamp;
+          store.setCandles(asset, convertedCandles);
+          this.lastCandleTimestamp[asset] = convertedCandles[convertedCandles.length - 1].timestamp;
         } else {
           // On subsequent fetches, only add new candles
-          console.log(`[Exchange API] ✓ Adding ${newCandles.length} new candle(s)`);
+          console.log(`[Exchange API] ✓ Adding ${newCandles.length} new candle(s) for ${asset}`);
           newCandles.forEach((candle) => {
             console.log(`[Exchange API] New candle at ${new Date(candle.timestamp).toISOString()}:`, candle);
-            useRealtimeStore.getState().addCandle(candle);
-            this.lastCandleTimestamp = candle.timestamp;
+            store.addCandle(asset, candle);
+            this.lastCandleTimestamp[asset] = candle.timestamp;
           });
         }
       } else {
-        console.log('[Exchange API] No new candles in this update');
+        console.log(`[Exchange API] No new candles for ${asset} in this update`);
       }
 
     } catch (error) {
       this.consecutiveErrors++;
-      console.error(`[Exchange API] Error fetching candles (${this.consecutiveErrors}/${this.maxRetries}):`, error);
+      console.error(`[Exchange API] Error fetching candles for ${asset} (${this.consecutiveErrors}/${this.maxRetries}):`, error);
 
       if (this.consecutiveErrors >= this.maxRetries) {
         console.error('[Exchange API] Max consecutive errors reached. Stopping polling.');
         this.stopPolling();
-        useRealtimeStore.getState().setConnectionState('error');
+        store.setConnectionState(asset, 'error', 'Failed to fetch candle data');
       }
     }
   }

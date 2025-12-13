@@ -129,7 +129,21 @@ export function ExtremeOpportunitiesWidget({
           <Target className="h-5 w-5" />
           Extreme Volatility Opportunities
         </h3>
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <div className="flex-1 space-y-3">
+          {/* Skeleton opportunity cards */}
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="p-3 bg-muted/10 rounded-lg space-y-2 animate-pulse">
+              <div className="flex justify-between">
+                <div className="h-4 w-24 bg-muted/30 rounded" />
+                <div className="h-5 w-12 bg-muted/40 rounded-full" />
+              </div>
+              <div className="flex gap-2">
+                <div className="h-3 w-16 bg-muted/20 rounded" />
+                <div className="h-3 w-20 bg-muted/20 rounded" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     )
   }

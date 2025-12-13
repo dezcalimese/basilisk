@@ -377,21 +377,36 @@ export function PriceChart({ signals = [], height = 400 }: PriceChartProps) {
 
   }, [signals]);
 
-  // Show placeholder if no candles
+  // Show skeleton loading state if no candles
   if (candles.length === 0) {
     return (
-      <div className="glass-card p-4">
-        <div className="mb-3">
-          <h3 className="text-lg font-semibold">{selectedAsset}/USD Price</h3>
-          <p className="text-xs text-muted-foreground mt-1">
-            1-minute candles • Binance spot price
-          </p>
+      <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
+        <div className="mb-3 flex-shrink-0">
+          <div className="flex items-center gap-1 mb-2">
+            {/* Skeleton time range buttons */}
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-7 w-10 bg-muted/50 rounded animate-pulse" />
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-4 w-32 bg-muted/50 rounded animate-pulse" />
+          </div>
         </div>
-        <div className="flex items-center justify-center" style={{ height }}>
-          <div className="text-center space-y-2">
-            <p className="text-muted-foreground text-sm">Loading candle data...</p>
+        <div className="flex-1 min-h-0 flex items-center justify-center">
+          <div className="text-center space-y-3">
+            {/* Skeleton chart lines */}
+            <div className="space-y-2 mb-4">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div
+                  key={i}
+                  className="h-1 bg-muted/30 rounded animate-pulse"
+                  style={{ width: `${100 - i * 10}%`, marginLeft: `${i * 5}%` }}
+                />
+              ))}
+            </div>
+            <p className="text-muted-foreground text-sm">Loading {selectedAsset} price data...</p>
             <p className="text-xs text-muted-foreground">
-              Fetching historical data from Binance
+              Fetching candles from exchanges
             </p>
           </div>
         </div>

@@ -80,8 +80,18 @@ export function VolatilitySkewChart({
     return (
       <div className="glass-card rounded-2xl p-6">
         <h3 className="text-lg font-semibold mb-4">Volatility Skew</h3>
-        <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Loading skew data...</p>
+        <div className="space-y-4">
+          {/* Skeleton chart */}
+          <div className="h-56 bg-muted/20 rounded-lg animate-pulse" />
+          {/* Skeleton legend */}
+          <div className="flex justify-center gap-6">
+            {[1, 2].map((i) => (
+              <div key={i} className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-muted/40 animate-pulse" />
+                <div className="h-3 w-16 bg-muted/30 rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );

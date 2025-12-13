@@ -9,6 +9,7 @@ from app.data.bitcoin_client import BitcoinPriceClient
 from app.data.ethereum_client import EthereumPriceClient
 from app.data.kalshi_client import KalshiClient
 from app.data.ripple_client import RipplePriceClient
+from app.models.order_flow import OrderFlowAnalyzer
 from app.models.predictor import ProbabilityPredictor
 from app.models.volatility import VolatilityRegime
 
@@ -24,6 +25,7 @@ class MarketService:
         self.xrp_client = RipplePriceClient()
         self.predictor = ProbabilityPredictor()
         self.vol_regime = VolatilityRegime()
+        self.order_flow = OrderFlowAnalyzer()
 
     @cached(ttl=60, key_prefix="contracts:btc")
     async def get_bitcoin_hourly_contracts(self) -> list[dict[str, Any]]:
@@ -263,12 +265,12 @@ class MarketService:
         else:
             print("⚠️  Deribit DVOL unavailable, falling back to heuristic model")
 
-        # Process each contract WITH DVOL
+        # Process each contract WITH DVOL (skip order book initially for speed)
         processed_contracts = []
         for idx, market in enumerate(btc_contracts):
             try:
                 contract_data = await self._process_contract(
-                    market, current_btc_price, idx + 1, dvol=dvol
+                    market, current_btc_price, idx + 1, dvol=dvol, fetch_orderbook=False
                 )
                 if contract_data:
                     processed_contracts.append(contract_data)
@@ -353,16 +355,22 @@ class MarketService:
         return False
 
     async def _process_contract(
-        self, market: dict[str, Any], current_btc_price: float, contract_id: int, dvol: float | None = None
+        self, market: dict[str, Any], current_btc_price: float, contract_id: int,
+        dvol: float | None = None, fetch_orderbook: bool = True
     ) -> dict[str, Any] | None:
         """
-        Process a single contract using DVOL for accurate probability calculations.
+        Process a single contract using DVOL and order flow for probability calculations.
+
+        Combines:
+        - Black-Scholes probability from DVOL
+        - Order Book Imbalance (OBI) adjustment (if fetch_orderbook=True)
 
         Args:
             market: Kalshi market data
             current_btc_price: Current BTC spot price
             contract_id: Unique contract ID
             dvol: Deribit volatility index (if available)
+            fetch_orderbook: Whether to fetch order book for OBI (False = faster)
 
         Returns:
             Processed contract data with theoretical probabilities and mispricing analysis
@@ -427,12 +435,44 @@ class MarketService:
             model_probability = self.predictor.predict_probability(features)
             theoretical_probability = model_probability
 
+        # Fetch order book and calculate OBI for probability adjustment (if enabled)
+        obi_data = None
+        flow_adjusted_probability = model_probability
+        if fetch_orderbook:
+            try:
+                orderbook = await self.kalshi_client.get_market_orderbook(ticker)
+                if orderbook:
+                    obi_signal = self.order_flow.calculate_order_book_imbalance(orderbook)
+                    obi_data = {
+                        "obi": obi_signal.obi,
+                        "obi_signal": obi_signal.obi_signal,
+                        "bid_volume": obi_signal.bid_volume,
+                        "ask_volume": obi_signal.ask_volume,
+                        "imbalance_pct": obi_signal.imbalance_pct,
+                        "prob_adjustment": obi_signal.prob_adjustment,
+                        "confidence": obi_signal.confidence,
+                    }
+
+                    # Adjust probability based on order flow
+                    # OBI > 0 (bullish) -> increase probability for CALL
+                    # OBI < 0 (bearish) -> decrease probability for CALL
+                    flow_adjustment = self.order_flow.adjust_probability_for_flow(
+                        model_probability, obi_signal
+                    )
+                    flow_adjusted_probability = flow_adjustment["adjusted_probability"]
+            except Exception:
+                # Order book fetch failed, continue without OBI
+                pass
+
+        # Use flow-adjusted probability for EV calculation
+        final_probability = flow_adjusted_probability
+
         # Calculate expected value for both YES and NO positions
         ev_yes = self.predictor.calculate_expected_value(
-            model_probability, yes_bid, yes_ask, "YES"
+            final_probability, yes_bid, yes_ask, "YES"
         )
         ev_no = self.predictor.calculate_expected_value(
-            model_probability, yes_bid, yes_ask, "NO"
+            final_probability, yes_bid, yes_ask, "NO"
         )
 
         # Determine recommended action - choose best EV
@@ -448,7 +488,7 @@ class MarketService:
 
         # Calculate MISPRICING: theoretical_probability vs implied_probability
         # This is the EDGE - how much Kalshi is mis-pricing the contract
-        mispricing = theoretical_probability - implied_probability
+        mispricing = final_probability - implied_probability
         mispricing_pct = mispricing / implied_probability if implied_probability > 0 else 0
 
         # Absolute edge for ranking
@@ -457,18 +497,24 @@ class MarketService:
         # Determine mispricing signal
         if mispricing > 0.10:  # Theoretical prob 10%+ higher than market
             mispricing_signal = "KALSHI_UNDERPRICED"  # BUY YES
-            mispricing_opportunity = f"Market prices YES at {implied_probability:.1%}, should be {theoretical_probability:.1%}. BUY YES"
+            mispricing_opportunity = f"Market prices YES at {implied_probability:.1%}, should be {final_probability:.1%}. BUY YES"
         elif mispricing < -0.10:  # Theoretical prob 10%+ lower than market
             mispricing_signal = "KALSHI_OVERPRICED"  # BUY NO
-            mispricing_opportunity = f"Market prices YES at {implied_probability:.1%}, should be {theoretical_probability:.1%}. BUY NO"
+            mispricing_opportunity = f"Market prices YES at {implied_probability:.1%}, should be {final_probability:.1%}. BUY NO"
         else:
             mispricing_signal = "FAIR_PRICED"
             mispricing_opportunity = None
 
-        # Calculate confidence based on edge size
+        # Calculate confidence based on edge size and OBI confirmation
         confidence = min(0.5 + (edge * 2), 0.95)
 
-        return {
+        # Boost confidence if OBI confirms the signal direction
+        if obi_data and obi_data["confidence"] in ["medium", "high"]:
+            if (signal_type == "BUY YES" and obi_data["obi_signal"] == "BULLISH") or \
+               (signal_type == "BUY NO" and obi_data["obi_signal"] == "BEARISH"):
+                confidence = min(confidence + 0.05, 0.95)
+
+        result = {
             "id": contract_id,
             "ticker": ticker,
             "signal_type": signal_type,
@@ -486,11 +532,18 @@ class MarketService:
             "implied_probability": implied_probability,  # What Kalshi market prices
             "model_probability": model_probability,  # What DVOL+BS calculates
             "theoretical_probability": theoretical_probability,  # Same as model (for clarity)
-            "mispricing": mispricing,  # Difference (theoretical - implied)
+            "flow_adjusted_probability": flow_adjusted_probability,  # OBI adjusted
+            "mispricing": mispricing,  # Difference (final - implied)
             "mispricing_pct": mispricing_pct,  # Percentage mispricing
             "mispricing_signal": mispricing_signal,  # Trading signal
             "mispricing_opportunity": mispricing_opportunity,  # Human-readable explanation
         }
+
+        # Add OBI data if available
+        if obi_data:
+            result["order_flow"] = obi_data
+
+        return result
 
     def _get_mock_contracts(self, current_btc_price: float) -> dict[str, Any]:
         """Return mock contracts for demo purposes."""
@@ -555,16 +608,20 @@ class MarketService:
             },
         ]
 
-        # Mock volatility data
+        # Mock volatility data (includes Yang-Zhang and HAR-RV)
         volatility_data = {
             "realized_vol": 0.45,
             "realized_vol_close": 0.45,
             "realized_vol_parkinson": 0.45,
+            "realized_vol_yang_zhang": 0.45,
             "implied_vol": 0.50,
             "regime": "NORMAL",
             "vol_premium": 0.05,
             "vol_premium_pct": 0.11,
             "vol_signal": "NEUTRAL",
+            "forecast_vol": 0.48,
+            "forecast_confidence": "high",
+            "rv_ratio": 1.1,
         }
 
         return {
@@ -861,9 +918,13 @@ class MarketService:
             "realized_vol": 0.45,
             "realized_vol_close": 0.45,
             "realized_vol_parkinson": 0.45,
+            "realized_vol_yang_zhang": 0.45,
             "implied_vol": 0.50,
             "regime": "NORMAL",
             "vol_premium": 0.05,
             "vol_premium_pct": 0.11,
             "vol_signal": "NEUTRAL",
+            "forecast_vol": 0.48,
+            "forecast_confidence": "medium",
+            "rv_ratio": 1.0,
         }

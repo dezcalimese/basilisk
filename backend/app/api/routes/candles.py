@@ -52,19 +52,38 @@ async def fetch_from_coingecko(limit: int = 500) -> List[Any]:
         raise Exception(f"CoinGecko error: {str(e)}")
 
 
-async def fetch_from_ccxt(interval: str, limit: int) -> List[Any]:
+async def fetch_from_ccxt(asset: str, interval: str, limit: int) -> List[Any]:
     """
     Fetch using CCXT library with multiple exchange fallback.
     Tries exchanges in order until one succeeds.
-    """
-    # Exchanges to try (in order of reliability for US users)
-    exchanges_to_try = [
-        {"id": "kraken", "symbol": "BTC/USD"},
-        {"id": "coinbase", "symbol": "BTC/USD"},
-        {"id": "bitfinex", "symbol": "BTC/USD"},
-        {"id": "bybit", "symbol": "BTC/USDT"},
-    ]
 
+    Args:
+        asset: Asset to fetch (BTC, ETH, XRP)
+        interval: Candle interval
+        limit: Number of candles
+    """
+    # Exchange configs per asset
+    ASSET_EXCHANGES = {
+        "BTC": [
+            {"id": "kraken", "symbol": "BTC/USD"},
+            {"id": "coinbase", "symbol": "BTC/USD"},
+            {"id": "bitfinex", "symbol": "BTC/USD"},
+            {"id": "bybit", "symbol": "BTC/USDT"},
+        ],
+        "ETH": [
+            {"id": "kraken", "symbol": "ETH/USD"},
+            {"id": "coinbase", "symbol": "ETH/USD"},
+            {"id": "bitfinex", "symbol": "ETH/USD"},
+            {"id": "bybit", "symbol": "ETH/USDT"},
+        ],
+        "XRP": [
+            {"id": "kraken", "symbol": "XRP/USD"},
+            {"id": "bitfinex", "symbol": "XRP/USD"},
+            {"id": "bybit", "symbol": "XRP/USDT"},
+        ],
+    }
+
+    exchanges_to_try = ASSET_EXCHANGES.get(asset.upper(), ASSET_EXCHANGES["BTC"])
     ccxt_interval = INTERVAL_MAP.get(interval, {}).get("ccxt", "1m")
     errors = []
 
@@ -87,7 +106,46 @@ async def fetch_from_ccxt(interval: str, limit: int) -> List[Any]:
             continue
 
     # If all exchanges failed, raise error
-    raise Exception(f"All exchanges failed. Errors: {'; '.join(errors)}")
+    raise Exception(f"All exchanges failed for {asset}. Errors: {'; '.join(errors)}")
+
+
+async def _get_candles(asset: str, interval: str, limit: int) -> List[Any]:
+    """Common candle fetching logic for all assets."""
+    try:
+        # Validate interval
+        if interval not in INTERVAL_MAP:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid interval. Must be one of: {', '.join(INTERVAL_MAP.keys())}"
+            )
+
+        # Try CCXT exchanges first (supports intraday data)
+        try:
+            candles = await fetch_from_ccxt(asset, interval, limit)
+            return candles
+        except Exception as ccxt_error:
+            print(f"[Candles API] CCXT failed for {asset}: {ccxt_error}")
+
+            # Fallback to CoinGecko (only for BTC daily data)
+            if interval == "1d" and asset == "BTC":
+                try:
+                    candles = await fetch_from_coingecko(limit)
+                    return candles
+                except Exception as cg_error:
+                    print(f"[Candles API] CoinGecko failed: {cg_error}")
+
+            # If everything failed, raise the original CCXT error
+            raise HTTPException(
+                status_code=503,
+                detail=f"Failed to fetch {asset} candles from any exchange: {str(ccxt_error)}"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Internal error fetching {asset} candles: {str(e)}"
+        )
 
 
 @router.get("/candles/btcusd")
@@ -105,38 +163,32 @@ async def get_btc_candles(
     Returns:
         List of candles in format: [timestamp, open, high, low, close, volume]
     """
-    try:
-        # Validate interval
-        if interval not in INTERVAL_MAP:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid interval. Must be one of: {', '.join(INTERVAL_MAP.keys())}"
-            )
+    return await _get_candles("BTC", interval, limit)
 
-        # Try CCXT exchanges first (supports intraday data)
-        try:
-            candles = await fetch_from_ccxt(interval, limit)
-            return candles
-        except Exception as ccxt_error:
-            print(f"[Candles API] CCXT failed: {ccxt_error}")
 
-            # Fallback to CoinGecko (only for daily data)
-            if interval == "1d":
-                try:
-                    candles = await fetch_from_coingecko(limit)
-                    return candles
-                except Exception as cg_error:
-                    print(f"[Candles API] CoinGecko failed: {cg_error}")
+@router.get("/candles/ethusd")
+async def get_eth_candles(
+    interval: str = Query(default="1m", description="Candle interval (1m, 5m, 15m, 1h, 4h, 1d)"),
+    limit: int = Query(default=500, ge=1, le=1000, description="Number of candles to return"),
+) -> List[Any]:
+    """
+    Fetch ETH/USD candlestick data with multi-exchange fallback.
 
-            # If everything failed, raise the original CCXT error
-            raise HTTPException(
-                status_code=503,
-                detail=f"Failed to fetch candles from any exchange: {str(ccxt_error)}"
-            )
+    Returns:
+        List of candles in format: [timestamp, open, high, low, close, volume]
+    """
+    return await _get_candles("ETH", interval, limit)
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Internal error fetching candles: {str(e)}"
-        )
+
+@router.get("/candles/xrpusd")
+async def get_xrp_candles(
+    interval: str = Query(default="1m", description="Candle interval (1m, 5m, 15m, 1h, 4h, 1d)"),
+    limit: int = Query(default=500, ge=1, le=1000, description="Number of candles to return"),
+) -> List[Any]:
+    """
+    Fetch XRP/USD candlestick data with multi-exchange fallback.
+
+    Returns:
+        List of candles in format: [timestamp, open, high, low, close, volume]
+    """
+    return await _get_candles("XRP", interval, limit)

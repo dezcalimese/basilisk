@@ -3,6 +3,7 @@ Redis cache layer for API optimization
 
 Provides caching decorators and utilities to reduce external API calls.
 Uses Redis for shared cache across multiple workers/instances.
+Falls back gracefully when Redis is unavailable.
 """
 
 import json
@@ -14,33 +15,53 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Global Redis client
+# Global Redis client and availability flag
 _redis_client: Optional[redis.Redis] = None
+_redis_available: bool = True  # Assume available until proven otherwise
 
 
-async def get_redis_client() -> redis.Redis:
-    """Get or create Redis client singleton"""
-    global _redis_client
+async def get_redis_client() -> Optional[redis.Redis]:
+    """Get or create Redis client singleton. Returns None if Redis unavailable."""
+    global _redis_client, _redis_available
+
+    if not _redis_available:
+        return None
 
     if _redis_client is None:
-        _redis_client = redis.from_url(
-            "redis://localhost:6379",
-            encoding="utf-8",
-            decode_responses=True,
-            max_connections=50
-        )
-        logger.info("✓ Redis client initialized")
+        try:
+            _redis_client = redis.from_url(
+                "redis://localhost:6379",
+                encoding="utf-8",
+                decode_responses=True,
+                max_connections=50
+            )
+            # Test connection
+            await _redis_client.ping()
+            logger.info("✓ Redis client initialized")
+        except Exception as e:
+            logger.warning(f"⚠️  Redis unavailable, caching disabled: {e}")
+            _redis_available = False
+            _redis_client = None
+            return None
 
     return _redis_client
 
 
 async def close_redis_client():
     """Close Redis connection on shutdown"""
-    global _redis_client
+    global _redis_client, _redis_available
     if _redis_client:
-        await _redis_client.aclose()
+        try:
+            await _redis_client.aclose()
+        except Exception:
+            pass
         _redis_client = None
         logger.info("✓ Redis client closed")
+
+
+def is_redis_available() -> bool:
+    """Check if Redis is available"""
+    return _redis_available
 
 
 def cached(ttl: int, key_prefix: str):
@@ -60,6 +81,13 @@ def cached(ttl: int, key_prefix: str):
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def wrapper(*args, **kwargs) -> Any:
+            # Get Redis client (None if unavailable)
+            client = await get_redis_client()
+
+            # If Redis unavailable, just call the function directly
+            if client is None:
+                return await func(*args, **kwargs)
+
             # Generate cache key from function args (skip 'self' for instance methods)
             # args[0] is 'self' for instance methods, skip it
             cache_args = args[1:] if args and hasattr(args[0], '__dict__') else args
@@ -68,7 +96,6 @@ def cached(ttl: int, key_prefix: str):
             cache_key = f"{key_prefix}:{arg_str}:{kwarg_str}".rstrip(":")
 
             # Try to get from cache
-            client = await get_redis_client()
             try:
                 cached_data = await client.get(cache_key)
                 if cached_data:
@@ -109,24 +136,47 @@ async def invalidate_cache(pattern: str):
         await invalidate_cache("contracts:BTC:*")
     """
     client = await get_redis_client()
-    keys = await client.keys(pattern)
-    if keys:
-        await client.delete(*keys)
-        logger.info(f"[Cache] Invalidated {len(keys)} keys matching {pattern}")
+    if client is None:
+        return
+
+    try:
+        keys = await client.keys(pattern)
+        if keys:
+            await client.delete(*keys)
+            logger.info(f"[Cache] Invalidated {len(keys)} keys matching {pattern}")
+    except Exception as e:
+        logger.warning(f"[Cache] Error invalidating keys: {e}")
 
 
 async def get_cache_stats() -> dict[str, Any]:
     """Get cache statistics for monitoring"""
     client = await get_redis_client()
-    info = await client.info("stats")
+    if client is None:
+        return {
+            "available": False,
+            "total_keys": 0,
+            "hits": 0,
+            "misses": 0,
+            "hit_rate": 0,
+            "memory_used_mb": 0,
+        }
 
-    return {
-        "total_keys": await client.dbsize(),
-        "hits": info.get("keyspace_hits", 0),
-        "misses": info.get("keyspace_misses", 0),
-        "hit_rate": (
-            info.get("keyspace_hits", 0) /
-            max(info.get("keyspace_hits", 0) + info.get("keyspace_misses", 0), 1)
-        ) * 100,
-        "memory_used_mb": info.get("used_memory", 0) / 1024 / 1024,
-    }
+    try:
+        info = await client.info("stats")
+        return {
+            "available": True,
+            "total_keys": await client.dbsize(),
+            "hits": info.get("keyspace_hits", 0),
+            "misses": info.get("keyspace_misses", 0),
+            "hit_rate": (
+                info.get("keyspace_hits", 0) /
+                max(info.get("keyspace_hits", 0) + info.get("keyspace_misses", 0), 1)
+            ) * 100,
+            "memory_used_mb": info.get("used_memory", 0) / 1024 / 1024,
+        }
+    except Exception as e:
+        logger.warning(f"[Cache] Error getting stats: {e}")
+        return {
+            "available": False,
+            "error": str(e),
+        }
