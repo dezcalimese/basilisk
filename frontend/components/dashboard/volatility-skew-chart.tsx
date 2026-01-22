@@ -41,7 +41,7 @@ interface VolatilitySkewChartProps {
 }
 
 export function VolatilitySkewChart({
-  apiUrl = "http://localhost:8000",
+  apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
   refreshInterval = 30000, // 30 seconds default
 }: VolatilitySkewChartProps) {
   const [skewData, setSkewData] = useState<VolSkewData | null>(null);
@@ -78,11 +78,11 @@ export function VolatilitySkewChart({
 
   if (loading) {
     return (
-      <div className="glass-card rounded-2xl p-6">
-        <h3 className="text-lg font-semibold mb-4">Volatility Skew</h3>
-        <div className="space-y-4">
+      <div className="glass-card rounded-2xl p-4 h-full flex flex-col">
+        <h3 className="text-sm font-semibold mb-2">Volatility Skew</h3>
+        <div className="flex-1 min-h-0 flex flex-col gap-2">
           {/* Skeleton chart */}
-          <div className="h-56 bg-muted/20 rounded-lg animate-pulse" />
+          <div className="flex-1 bg-muted/20 rounded-lg animate-pulse" />
           {/* Skeleton legend */}
           <div className="flex justify-center gap-6">
             {[1, 2].map((i) => (
@@ -99,10 +99,10 @@ export function VolatilitySkewChart({
 
   if (error || !skewData) {
     return (
-      <div className="glass-card rounded-2xl p-6">
-        <h3 className="text-lg font-semibold mb-4">Volatility Skew</h3>
-        <div className="flex items-center justify-center h-64">
-          <p className="text-destructive">{error || "No data available"}</p>
+      <div className="glass-card rounded-2xl p-4 h-full flex flex-col">
+        <h3 className="text-sm font-semibold mb-2">Volatility Skew</h3>
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-destructive text-sm">{error || "No data available"}</p>
         </div>
       </div>
     );
@@ -120,56 +120,51 @@ export function VolatilitySkewChart({
     .sort((a, b) => a.moneyness - b.moneyness);
 
   return (
-    <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
+    <div className="glass-card rounded-2xl p-4 h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold">{selectedAsset} Volatility Skew</h3>
-        <p className="text-sm text-muted-foreground">
+      <div className="flex-none mb-2">
+        <h3 className="text-sm font-semibold">{selectedAsset} Volatility Skew</h3>
+        <p className="text-xs text-muted-foreground line-clamp-1">
           {skewData.skew_interpretation}
         </p>
       </div>
 
       {/* Skew Metrics Grid */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="flex-none grid grid-cols-4 gap-2 mb-2">
         <MetricBox
           label="ATM IV"
           value={`${(skewData.atm_iv * 100).toFixed(1)}%`}
         />
         <MetricBox
-          label="OTM Call IV"
+          label="OTM Call"
           value={`${(skewData.otm_call_iv * 100).toFixed(1)}%`}
         />
         <MetricBox
-          label="OTM Put IV"
+          label="OTM Put"
           value={`${(skewData.otm_put_iv * 100).toFixed(1)}%`}
         />
         <SkewMetric skew={skewData.skew} />
       </div>
 
       {/* Skew Curve */}
-      <div className="mb-6">
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={chartData}>
+      <div className="flex-1 min-h-0 mb-2">
+        <ResponsiveContainer width="100%" height={130}>
+          <LineChart data={chartData} margin={{ top: 5, right: 5, bottom: 20, left: 0 }}>
             <XAxis
               dataKey="moneynessDisplay"
-              tick={{ fontSize: 10, fill: "#94a3b8" }}
+              tick={{ fontSize: 9, fill: "#94a3b8" }}
               stroke="#94a3b8"
               label={{
-                value: "Moneyness (Strike/Spot)",
+                value: "Moneyness",
                 position: "insideBottom",
-                offset: -5,
-                style: { fontSize: 11, fill: "#94a3b8" },
+                offset: -10,
+                style: { fontSize: 9, fill: "#94a3b8" },
               }}
             />
             <YAxis
-              tick={{ fontSize: 10, fill: "#94a3b8" }}
+              tick={{ fontSize: 9, fill: "#94a3b8" }}
               stroke="#94a3b8"
-              label={{
-                value: "Implied Vol %",
-                angle: -90,
-                position: "insideLeft",
-                style: { fontSize: 11, fill: "#94a3b8" },
-              }}
+              width={35}
               tickFormatter={(value) => `${value.toFixed(0)}%`}
             />
             <Tooltip
@@ -177,7 +172,7 @@ export function VolatilitySkewChart({
                 backgroundColor: "rgba(15, 23, 42, 0.9)",
                 border: "1px solid rgba(148, 163, 184, 0.2)",
                 borderRadius: "8px",
-                fontSize: 12,
+                fontSize: 11,
               }}
               formatter={(value: number) => `${value.toFixed(1)}%`}
               labelFormatter={(label) => `Moneyness: ${label}`}
@@ -186,41 +181,30 @@ export function VolatilitySkewChart({
               x="1.000"
               stroke="#94a3b8"
               strokeDasharray="3 3"
-              label={{ value: "ATM", fill: "#94a3b8", fontSize: 10 }}
+              label={{ value: "ATM", fill: "#94a3b8", fontSize: 9 }}
             />
             <Line
               type="monotone"
               dataKey="iv"
-              stroke="#10b981"
+              stroke="#06b6d4"
               strokeWidth={2}
-              dot={{ fill: "#10b981", r: 3 }}
-              activeDot={{ r: 5 }}
+              dot={{ fill: "#06b6d4", r: 2 }}
+              activeDot={{ r: 4 }}
             />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Interpretation */}
-      <div className="p-3 bg-muted/50 rounded-lg border border-border/50">
-        <p className="text-sm">
-          <strong className="font-semibold">What this means:</strong>{" "}
+      {/* Interpretation - compact */}
+      <div className="flex-none p-2 bg-muted/50 rounded-lg border border-border/50">
+        <p className="text-xs leading-relaxed">
+          <strong className="font-semibold">Insight:</strong>{" "}
           {skewData.skew > 0.1 ? (
-            <>
-              Lower strikes (YES at low levels) are more expensive than higher strikes.
-              Market is pricing in downside risk (fear). If you disagree, buy YES on
-              higher strikes (bet {selectedAsset} rises).
-            </>
+            <>Downside risk priced in. Consider YES on higher strikes.</>
           ) : skewData.skew < -0.1 ? (
-            <>
-              Higher strikes (YES at high levels) are more expensive than lower strikes.
-              Market expects strong upside (greed). If you disagree, buy YES on lower
-              strikes (bet {selectedAsset} stays lower).
-            </>
+            <>Upside expected. Consider YES on lower strikes.</>
           ) : (
-            <>
-              Skew is relatively flat. Market has symmetric expectations around current
-              price. No strong directional bias in digital option pricing.
-            </>
+            <>Flat skew - symmetric market expectations.</>
           )}
         </p>
       </div>
@@ -231,8 +215,8 @@ export function VolatilitySkewChart({
 function MetricBox({ label, value }: { label: string; value: string }) {
   return (
     <div className="text-center">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-md font-semibold">{value}</p>
+      <p className="text-[10px] text-muted-foreground">{label}</p>
+      <p className="text-sm font-semibold">{value}</p>
     </div>
   );
 }
@@ -240,14 +224,14 @@ function MetricBox({ label, value }: { label: string; value: string }) {
 function SkewMetric({ skew }: { skew: number }) {
   const color =
     skew > 0.1
-      ? "text-red-500"
+      ? "text-red-400"
       : skew < -0.1
-      ? "text-green-500"
-      : "text-yellow-500";
+      ? "text-cyan-400"
+      : "text-amber-400";
   return (
     <div className="text-center">
-      <p className="text-xs text-muted-foreground">Skew</p>
-      <p className={`text-md font-bold ${color}`}>
+      <p className="text-[10px] text-muted-foreground">Skew</p>
+      <p className={`text-sm font-bold ${color}`}>
         {skew > 0 ? "+" : ""}
         {skew.toFixed(2)}
       </p>

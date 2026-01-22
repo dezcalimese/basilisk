@@ -27,7 +27,7 @@ class MarketService:
         self.vol_regime = VolatilityRegime()
         self.order_flow = OrderFlowAnalyzer()
 
-    @cached(ttl=60, key_prefix="contracts:btc")
+    @cached(ttl=120, key_prefix="contracts:btc")
     async def get_bitcoin_hourly_contracts(self) -> list[dict[str, Any]]:
         """
         Fetch Bitcoin hourly contracts from Kalshi and process them.
@@ -650,7 +650,7 @@ class MarketService:
 
         return None
 
-    @cached(ttl=60, key_prefix="contracts:eth")
+    @cached(ttl=120, key_prefix="contracts:eth")
     async def get_ethereum_hourly_contracts(self) -> dict[str, Any]:
         """
         Fetch Ethereum hourly contracts from Kalshi and process them.
@@ -781,7 +781,7 @@ class MarketService:
             "volatility": volatility_data
         }
 
-    @cached(ttl=60, key_prefix="contracts:xrp")
+    @cached(ttl=120, key_prefix="contracts:xrp")
     async def get_ripple_hourly_contracts(self) -> dict[str, Any]:
         """
         Fetch Ripple (XRP) hourly contracts from Kalshi and process them.

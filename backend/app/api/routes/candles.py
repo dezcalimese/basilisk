@@ -1,10 +1,13 @@
 """Candles API routes - Multi-exchange proxy with fallback."""
 
+import asyncio
 import httpx
 import ccxt
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Any
 import time
+
+from app.core.cache import cached
 
 router = APIRouter()
 
@@ -52,10 +55,20 @@ async def fetch_from_coingecko(limit: int = 500) -> List[Any]:
         raise Exception(f"CoinGecko error: {str(e)}")
 
 
+def _sync_fetch_ohlcv(exchange_id: str, symbol: str, interval: str, limit: int) -> List[Any]:
+    """
+    Synchronous CCXT fetch - runs in thread pool to avoid blocking event loop.
+    """
+    exchange_class = getattr(ccxt, exchange_id)
+    exchange = exchange_class({"enableRateLimit": True})
+    return exchange.fetch_ohlcv(symbol, interval, limit=limit)
+
+
 async def fetch_from_ccxt(asset: str, interval: str, limit: int) -> List[Any]:
     """
     Fetch using CCXT library with multiple exchange fallback.
     Tries exchanges in order until one succeeds.
+    Uses asyncio.to_thread() to avoid blocking the event loop.
 
     Args:
         asset: Asset to fetch (BTC, ETH, XRP)
@@ -89,16 +102,17 @@ async def fetch_from_ccxt(asset: str, interval: str, limit: int) -> List[Any]:
 
     for exchange_config in exchanges_to_try:
         try:
-            # Create exchange instance
-            exchange_class = getattr(ccxt, exchange_config["id"])
-            exchange = exchange_class({"enableRateLimit": True})
-
-            # Fetch OHLCV data
-            ohlcv = exchange.fetch_ohlcv(
-                exchange_config["symbol"], ccxt_interval, limit=limit
+            # Run synchronous CCXT call in thread pool to avoid blocking
+            ohlcv = await asyncio.to_thread(
+                _sync_fetch_ohlcv,
+                exchange_config["id"],
+                exchange_config["symbol"],
+                ccxt_interval,
+                limit,
             )
 
             # CCXT format: [[timestamp, open, high, low, close, volume], ...]
+            print(f"[Candles] Fetched {asset} from {exchange_config['id']}")
             return ohlcv
 
         except Exception as e:
@@ -107,6 +121,31 @@ async def fetch_from_ccxt(asset: str, interval: str, limit: int) -> List[Any]:
 
     # If all exchanges failed, raise error
     raise Exception(f"All exchanges failed for {asset}. Errors: {'; '.join(errors)}")
+
+
+@cached(ttl=30, key_prefix="candles")
+async def _get_candles_cached(asset: str, interval: str, limit: int) -> List[Any]:
+    """
+    Cached candle fetching with multi-exchange fallback.
+    TTL is 30 seconds to balance freshness with rate limiting.
+    """
+    # Try CCXT exchanges first (supports intraday data)
+    try:
+        candles = await fetch_from_ccxt(asset, interval, limit)
+        return candles
+    except Exception as ccxt_error:
+        print(f"[Candles API] CCXT failed for {asset}: {ccxt_error}")
+
+        # Fallback to CoinGecko (only for BTC daily data)
+        if interval == "1d" and asset == "BTC":
+            try:
+                candles = await fetch_from_coingecko(limit)
+                return candles
+            except Exception as cg_error:
+                print(f"[Candles API] CoinGecko failed: {cg_error}")
+
+        # If everything failed, raise the original CCXT error
+        raise ccxt_error
 
 
 async def _get_candles(asset: str, interval: str, limit: int) -> List[Any]:
@@ -119,32 +158,14 @@ async def _get_candles(asset: str, interval: str, limit: int) -> List[Any]:
                 detail=f"Invalid interval. Must be one of: {', '.join(INTERVAL_MAP.keys())}"
             )
 
-        # Try CCXT exchanges first (supports intraday data)
-        try:
-            candles = await fetch_from_ccxt(asset, interval, limit)
-            return candles
-        except Exception as ccxt_error:
-            print(f"[Candles API] CCXT failed for {asset}: {ccxt_error}")
-
-            # Fallback to CoinGecko (only for BTC daily data)
-            if interval == "1d" and asset == "BTC":
-                try:
-                    candles = await fetch_from_coingecko(limit)
-                    return candles
-                except Exception as cg_error:
-                    print(f"[Candles API] CoinGecko failed: {cg_error}")
-
-            # If everything failed, raise the original CCXT error
-            raise HTTPException(
-                status_code=503,
-                detail=f"Failed to fetch {asset} candles from any exchange: {str(ccxt_error)}"
-            )
+        return await _get_candles_cached(asset, interval, limit)
 
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Internal error fetching {asset} candles: {str(e)}"
+            status_code=503,
+            detail=f"Failed to fetch {asset} candles from any exchange: {str(e)}"
         )
 
 

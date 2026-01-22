@@ -4,14 +4,14 @@
  * Trade signals list component
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAnimatedNumber } from "@/hooks/use-animated-number";
 import { useRealtimeStore } from "@/lib/stores/realtime-store";
 import { useAnalyticalStore } from "@/lib/stores/analytical-store";
-import type { TradeSignal } from "@/lib/api";
+import { api, type TradeSignal, type TradeResponse } from "@/lib/api";
 import { GreeksProfile, calculateGreeksForSignal } from "@/components/dashboard/greeks-profile";
 import { TradeModal, type TradeOrder } from "@/components/trading/trade-modal";
 
@@ -115,24 +115,85 @@ function parseTickerInfo(ticker: string, expiryTime?: string) {
   };
 }
 
+/**
+ * Extract asset type from Kalshi ticker (e.g., KXBTCD-... -> BTC)
+ */
+function extractAssetFromTicker(ticker: string): "BTC" | "ETH" | "XRP" {
+  if (ticker.startsWith("KXBTC")) return "BTC";
+  if (ticker.startsWith("KXETH")) return "ETH";
+  if (ticker.startsWith("KXXRP")) return "XRP";
+  return "BTC"; // Default
+}
+
+/**
+ * Extract strike price from ticker or signal
+ */
+function extractStrike(ticker: string, signal: TradeSignal): number {
+  if (signal.strike_price) return signal.strike_price;
+  const match = ticker.match(/[TAB]([\d.]+)/);
+  return match ? parseFloat(match[1]) : 0;
+}
+
 export function SignalList({ signals, currentTime, selectedTicker, onSelectSignal }: SignalListProps) {
   // Trade modal state
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [selectedSignalForTrade, setSelectedSignalForTrade] = useState<TradeSignal | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [tradeResult, setTradeResult] = useState<TradeResponse | null>(null);
+  const [tradeError, setTradeError] = useState<string | null>(null);
 
   // Filter out HOLD signals - only show actionable trades
   const actionableSignals = signals.filter(signal => signal.signal_type !== "HOLD");
 
   const handleOpenTradeModal = (signal: TradeSignal) => {
     setSelectedSignalForTrade(signal);
+    setTradeResult(null);
+    setTradeError(null);
     setTradeModalOpen(true);
   };
 
-  const handleTradeSubmit = (order: TradeOrder) => {
-    console.log("Trade order submitted:", order);
-    // TODO: Integrate with Kalshi API to place the order
+  const handleCloseModal = useCallback(() => {
     setTradeModalOpen(false);
-  };
+    setTradeResult(null);
+    setTradeError(null);
+  }, []);
+
+  const handleTradeSubmit = useCallback(async (order: TradeOrder) => {
+    if (!selectedSignalForTrade) return;
+
+    setIsSubmitting(true);
+    setTradeError(null);
+    setTradeResult(null);
+
+    try {
+      const result = await api.executeTrade({
+        ticker: order.ticker,
+        asset: extractAssetFromTicker(order.ticker),
+        direction: order.side.toUpperCase() as "YES" | "NO",
+        strike: extractStrike(order.ticker, selectedSignalForTrade),
+        contracts: order.quantity,
+        order_type: order.orderType,
+        limit_price: order.limitPrice,
+        signal_id: selectedSignalForTrade.id?.toString(),
+      });
+
+      setTradeResult(result);
+
+      if (result.success) {
+        // Auto-close after successful trade
+        setTimeout(() => {
+          handleCloseModal();
+        }, 2000);
+      } else {
+        setTradeError(result.error || "Trade failed");
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to execute trade";
+      setTradeError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [selectedSignalForTrade, handleCloseModal]);
 
   if (actionableSignals.length === 0) {
     return (
@@ -165,8 +226,11 @@ export function SignalList({ signals, currentTime, selectedTicker, onSelectSigna
       <TradeModal
         signal={selectedSignalForTrade}
         isOpen={tradeModalOpen}
-        onClose={() => setTradeModalOpen(false)}
+        onClose={handleCloseModal}
         onSubmit={handleTradeSubmit}
+        isSubmitting={isSubmitting}
+        tradeResult={tradeResult}
+        tradeError={tradeError}
       />
     </div>
   );
@@ -205,32 +269,27 @@ function SignalRow({ signal, currentTime, isSelected, onSelect, onTrade }: Signa
   return (
     <div
       onClick={onSelect}
-      className={`p-3 rounded-lg border transition-all duration-200 backdrop-blur-sm cursor-pointer ${
-        isSelected
-          ? "border-primary bg-primary/10 shadow-md"
-          : "border-border/50 hover:border-border hover:shadow-md"
-      }`}
+      className={`signal-card p-3 cursor-pointer ${isSelected ? "selected" : ""}`}
     >
       {/* Collapsed view for non-selected signals */}
       {!isSelected ? (
-        <div className="flex items-center justify-between">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold truncate">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm font-bold">
                 {tickerInfo.date} @ {tickerInfo.time}
               </h3>
-              <Badge
-                variant={
+              <span
+                className={`text-xs py-0.5 px-2 rounded-md font-medium whitespace-nowrap flex-shrink-0 ${
                   signal.signal_type === "BUY YES"
-                    ? "default"
+                    ? "badge-buy-yes"
                     : signal.signal_type === "BUY NO"
-                    ? "secondary"
-                    : "outline"
-                }
-                className="text-xs py-0 px-1.5"
+                    ? "badge-buy-no"
+                    : "bg-muted text-muted-foreground"
+                }`}
               >
                 {signal.signal_type}
-              </Badge>
+              </span>
             </div>
             <div className="text-xs text-muted-foreground mt-0.5">
               Strike: {signal.strike_price ? `$${signal.strike_price.toLocaleString()}` : tickerInfo.strike}
@@ -239,13 +298,13 @@ function SignalRow({ signal, currentTime, isSelected, onSelect, onTrade }: Signa
           <div className="text-right ml-3 flex-shrink-0">
             <div
               className={`text-base font-bold ${
-                evIsPositive ? "text-green-600" : "text-red-600"
+                evIsPositive ? "value-positive" : "value-negative"
               }`}
             >
               {evIsPositive ? "+" : ""}
               {(animatedEv * 100).toFixed(1)}%
             </div>
-            <div className="text-xs text-muted-foreground">
+            <div className="text-xs text-muted-foreground font-mono">
               {timeRemainingLabel}
             </div>
           </div>
@@ -253,25 +312,24 @@ function SignalRow({ signal, currentTime, isSelected, onSelect, onTrade }: Signa
       ) : (
         /* Expanded view for selected signal */
         <>
-        <div className="flex items-start justify-between">
-          <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1">
             {/* Readable expiry date/time */}
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-sm font-bold truncate">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <h3 className="text-sm font-bold">
                 {tickerInfo.date} @ {tickerInfo.time}
               </h3>
-              <Badge
-                variant={
+              <span
+                className={`text-xs py-0.5 px-2 rounded-md font-medium whitespace-nowrap flex-shrink-0 ${
                   signal.signal_type === "BUY YES"
-                    ? "default"
+                    ? "badge-buy-yes"
                     : signal.signal_type === "BUY NO"
-                    ? "secondary"
-                    : "outline"
-                }
-                className="text-xs py-0 px-1.5"
+                    ? "badge-buy-no"
+                    : "bg-muted text-muted-foreground"
+                }`}
               >
                 {signal.signal_type}
-              </Badge>
+              </span>
             </div>
 
             {/* Strike price */}
@@ -285,7 +343,7 @@ function SignalRow({ signal, currentTime, isSelected, onSelect, onTrade }: Signa
             </div>
 
             {/* Ticker reference */}
-            <div className="text-xs text-muted-foreground mb-1 font-mono truncate">
+            <div className="text-xs text-muted-foreground mb-1 font-mono break-all">
               {signal.ticker}
             </div>
 
@@ -312,20 +370,20 @@ function SignalRow({ signal, currentTime, isSelected, onSelect, onTrade }: Signa
           <div className="text-right ml-3 flex-shrink-0">
             <div
               className={`text-lg font-bold ${
-                evIsPositive ? "text-green-600" : "text-red-600"
+                evIsPositive ? "value-positive" : "value-negative"
               }`}
             >
               {evIsPositive ? "+" : ""}
               {(animatedEv * 100).toFixed(1)}% EV
             </div>
-            <div className="text-xs text-muted-foreground mt-0.5">
+            <div className="text-xs text-muted-foreground mt-1">
               {(signal.edge_percentage * 100).toFixed(1)}% edge
             </div>
             <div className="text-xs text-muted-foreground mt-0.5">
               {(signal.confidence_score * 100).toFixed(0)}% confidence
             </div>
             {signal.model_probability !== undefined && (
-              <div className="text-xs text-muted-foreground mt-0.5">
+              <div className="text-xs text-cyan-500 mt-1 font-medium">
                 Model: {(signal.model_probability * 100).toFixed(1)}%
               </div>
             )}
@@ -338,7 +396,7 @@ function SignalRow({ signal, currentTime, isSelected, onSelect, onTrade }: Signa
             e.stopPropagation();
             onTrade?.();
           }}
-          className="mt-3 w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors"
+          className="btn-basilisk mt-3 w-full py-2.5 px-4 text-sm"
         >
           Trade This Signal
         </button>

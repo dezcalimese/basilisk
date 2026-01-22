@@ -5,9 +5,10 @@ import { useEffect, useRef, useState } from "react";
 interface AnimatedPriceProps {
   price: number;
   decimals?: number;
+  className?: string;
 }
 
-export function AnimatedPrice({ price, decimals = 2 }: AnimatedPriceProps) {
+export function AnimatedPrice({ price, decimals = 2, className }: AnimatedPriceProps) {
   const [displayPrice, setDisplayPrice] = useState(price);
   const [isAnimating, setIsAnimating] = useState(false);
   const [priceDirection, setPriceDirection] = useState<"up" | "down" | null>(
@@ -56,11 +57,11 @@ export function AnimatedPrice({ price, decimals = 2 }: AnimatedPriceProps) {
   return (
     <div className="relative flex items-center gap-1">
       <span
-        className={`text-2xl font-bold transition-all duration-300 ${
+        className={`font-bold transition-all duration-300 ${className || "text-2xl"} ${
           isAnimating
             ? priceDirection === "up"
-              ? "text-green-600"
-              : "text-red-600"
+              ? "text-cyan-500"
+              : "text-red-500"
             : ""
         }`}
       >
@@ -71,8 +72,8 @@ export function AnimatedPrice({ price, decimals = 2 }: AnimatedPriceProps) {
       </span>
       {isAnimating && (
         <span
-          className={`text-lg animate-bounce ${
-            priceDirection === "up" ? "text-green-600" : "text-red-600"
+          className={`text-sm animate-bounce ${
+            priceDirection === "up" ? "text-cyan-500" : "text-red-500"
           }`}
         >
           {priceDirection === "up" ? "↑" : "↓"}

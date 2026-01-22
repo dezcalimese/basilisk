@@ -38,6 +38,70 @@ export interface HealthResponse {
   service: string;
 }
 
+export interface ExecuteTradeRequest {
+  ticker: string;
+  asset: "BTC" | "ETH" | "XRP";
+  direction: "YES" | "NO";
+  strike: number;
+  contracts: number;
+  order_type: "market" | "limit";
+  limit_price?: number;
+  signal_id?: string;
+}
+
+export interface TradeResponse {
+  success: boolean;
+  trade_id?: number;
+  order_id?: string;
+  client_order_id?: string;
+  filled: number;
+  price?: number;
+  cost?: number;
+  error?: string;
+}
+
+export interface Position {
+  trade_id: number;
+  ticker: string;
+  asset: string;
+  direction: string;
+  strike: number;
+  contracts: number;
+  entry_price: number;
+  current_price?: number;
+  unrealized_pnl?: number;
+  status: string;
+  expiry_at?: string;
+  opened_at: string;
+}
+
+export interface TradeHistory {
+  id: number;
+  ticker: string;
+  asset: string;
+  direction: string;
+  strike: number;
+  contracts: number;
+  entry_price: number;
+  exit_price?: number;
+  fees?: number;
+  pnl?: number;
+  status: string;
+  opened_at: string;
+  closed_at?: string;
+}
+
+export interface PnLSummary {
+  period: string;
+  total_pnl: number;
+  total_fees: number;
+  net_pnl: number;
+  trade_count: number;
+  wins: number;
+  losses: number;
+  win_rate: number;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -82,6 +146,54 @@ class ApiClient {
 
   async getSignal(signalId: number): Promise<TradeSignal> {
     return this.request<TradeSignal>(`/api/v1/signals/${signalId}`);
+  }
+
+  // Trading endpoints
+  async executeTrade(request: ExecuteTradeRequest): Promise<TradeResponse> {
+    return this.request<TradeResponse>("/api/v1/trade", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+  }
+
+  async executeTradeFromSignal(
+    signalId: number,
+    contracts: number
+  ): Promise<TradeResponse> {
+    return this.request<TradeResponse>("/api/v1/trade/signal", {
+      method: "POST",
+      body: JSON.stringify({ signal_id: signalId, contracts }),
+    });
+  }
+
+  async getPositions(): Promise<Position[]> {
+    return this.request<Position[]>("/api/v1/trade/positions");
+  }
+
+  async getPosition(tradeId: number): Promise<Position> {
+    return this.request<Position>(`/api/v1/trade/positions/${tradeId}`);
+  }
+
+  async closePosition(tradeId: number): Promise<TradeResponse> {
+    return this.request<TradeResponse>(`/api/v1/trade/positions/${tradeId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getTradeHistory(limit = 50, offset = 0): Promise<TradeHistory[]> {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    });
+    return this.request<TradeHistory[]>(`/api/v1/trade/history?${params}`);
+  }
+
+  async getPnLSummary(period: "today" | "week" | "all" = "today"): Promise<PnLSummary> {
+    return this.request<PnLSummary>(`/api/v1/trade/pnl/${period}`);
+  }
+
+  async getBalance(): Promise<{ balance: number; available: number }> {
+    return this.request<{ balance: number; available: number }>("/api/v1/trade/balance");
   }
 }
 

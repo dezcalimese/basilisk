@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
 from app.core.config import settings
-from app.core.http_client import get_http_client, rate_limited_request
+from app.core.http_client import serialized_request
 
 
 class OrderSide(str, Enum):
@@ -88,7 +88,7 @@ class KalshiClient:
         if cursor:
             params["cursor"] = cursor
 
-        response = await rate_limited_request(
+        response = await serialized_request(
             "GET",
             f"{self.base_url}{path}",
             params=params,
@@ -109,7 +109,7 @@ class KalshiClient:
             Orderbook data with bids and asks
         """
         path = f"/markets/{ticker}/orderbook"
-        response = await rate_limited_request(
+        response = await serialized_request(
             "GET",
             f"{self.base_url}{path}",
             headers=self._get_auth_headers(method="GET", path=path),
@@ -146,7 +146,6 @@ class KalshiClient:
             OrderResult with order details or error
         """
         path = "/portfolio/orders"
-        client = await get_http_client()
 
         # Generate client order ID if not provided
         if client_order_id is None:
@@ -172,7 +171,8 @@ class KalshiClient:
             payload["builder_code"] = builder_code
 
         try:
-            response = await client.post(
+            response = await serialized_request(
+                "POST",
                 f"{self.base_url}{path}",
                 json=payload,
                 headers=self._get_auth_headers(method="POST", path=path),
@@ -220,8 +220,8 @@ class KalshiClient:
             Order details
         """
         path = f"/portfolio/orders/{order_id}"
-        client = await get_http_client()
-        response = await client.get(
+        response = await serialized_request(
+            "GET",
             f"{self.base_url}{path}",
             headers=self._get_auth_headers(method="GET", path=path),
             timeout=30.0,
@@ -240,9 +240,9 @@ class KalshiClient:
             True if cancelled successfully
         """
         path = f"/portfolio/orders/{order_id}"
-        client = await get_http_client()
         try:
-            response = await client.delete(
+            response = await serialized_request(
+                "DELETE",
                 f"{self.base_url}{path}",
                 headers=self._get_auth_headers(method="DELETE", path=path),
                 timeout=30.0,
@@ -260,8 +260,8 @@ class KalshiClient:
             List of open positions
         """
         path = "/portfolio/positions"
-        client = await get_http_client()
-        response = await client.get(
+        response = await serialized_request(
+            "GET",
             f"{self.base_url}{path}",
             headers=self._get_auth_headers(method="GET", path=path),
             timeout=30.0,
@@ -287,14 +287,14 @@ class KalshiClient:
             List of fills
         """
         path = "/portfolio/fills"
-        client = await get_http_client()
         params: dict[str, Any] = {"limit": limit}
         if ticker:
             params["ticker"] = ticker
         if cursor:
             params["cursor"] = cursor
 
-        response = await client.get(
+        response = await serialized_request(
+            "GET",
             f"{self.base_url}{path}",
             params=params,
             headers=self._get_auth_headers(method="GET", path=path),
@@ -311,8 +311,8 @@ class KalshiClient:
             Balance information
         """
         path = "/portfolio/balance"
-        client = await get_http_client()
-        response = await client.get(
+        response = await serialized_request(
+            "GET",
             f"{self.base_url}{path}",
             headers=self._get_auth_headers(method="GET", path=path),
             timeout=30.0,
@@ -402,3 +402,58 @@ class KalshiClient:
             "KALSHI-ACCESS-SIGNATURE": signature,
             "KALSHI-ACCESS-TIMESTAMP": timestamp,
         }
+
+
+class KalshiClientWithCredentials(KalshiClient):
+    """
+    Kalshi client that accepts credentials directly instead of from settings.
+
+    Used for validating user-provided credentials and per-user trading.
+    """
+
+    def __init__(
+        self,
+        key_id: str,
+        private_key_pem: str,
+        use_demo: bool = True,
+    ) -> None:
+        """
+        Initialize client with provided credentials.
+
+        Args:
+            key_id: Kalshi API Key ID
+            private_key_pem: RSA private key in PEM format
+            use_demo: Whether to use demo API (default True for safety)
+        """
+        self.base_url = (
+            settings.kalshi_demo_base_url
+            if use_demo
+            else settings.kalshi_api_base_url
+        )
+        self.key_id = key_id
+        self.private_key = self._load_private_key_from_pem(private_key_pem)
+
+    def _load_private_key_from_pem(self, pem_content: str) -> Any:
+        """
+        Load RSA private key from PEM string content.
+
+        Args:
+            pem_content: PEM-formatted private key string
+
+        Returns:
+            RSA private key object
+        """
+        if not pem_content:
+            return None
+
+        # Ensure proper PEM format
+        pem_content = pem_content.strip()
+        if not pem_content.startswith("-----BEGIN"):
+            pem_content = f"-----BEGIN RSA PRIVATE KEY-----\n{pem_content}\n-----END RSA PRIVATE KEY-----"
+
+        private_key = serialization.load_pem_private_key(
+            pem_content.encode("utf-8"),
+            password=None,
+            backend=default_backend(),
+        )
+        return private_key

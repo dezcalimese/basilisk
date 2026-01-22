@@ -50,7 +50,7 @@ interface HourlyStatsWidgetProps {
 }
 
 export function HourlyStatsWidget({
-  apiUrl = "http://localhost:8000",
+  apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
   refreshInterval = 60000, // 1 minute default
 }: HourlyStatsWidgetProps) {
   const [stats, setStats] = useState<HourlyStats | null>(null);
@@ -101,24 +101,18 @@ export function HourlyStatsWidget({
 
   if (loading) {
     return (
-      <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
-        <h3 className="text-lg font-semibold mb-4 flex-shrink-0">Hourly Movement Statistics</h3>
-        <div className="flex-1 space-y-4">
+      <div className="glass-card rounded-2xl p-4 h-full flex flex-col">
+        <h3 className="text-sm font-semibold mb-2 flex-shrink-0">Hourly Movement Statistics</h3>
+        <div className="flex-1 min-h-0 flex flex-col gap-2">
           {/* Skeleton chart area */}
-          <div className="h-48 bg-muted/20 rounded-lg animate-pulse" />
+          <div className="flex-1 bg-muted/20 rounded-lg animate-pulse" />
           {/* Skeleton stats row */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-2">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="space-y-2">
-                <div className="h-3 w-20 bg-muted/30 rounded animate-pulse" />
-                <div className="h-6 w-16 bg-muted/40 rounded animate-pulse" />
+              <div key={i} className="space-y-1">
+                <div className="h-2 w-16 bg-muted/30 rounded animate-pulse" />
+                <div className="h-4 w-12 bg-muted/40 rounded animate-pulse" />
               </div>
-            ))}
-          </div>
-          {/* Skeleton bottom row */}
-          <div className="grid grid-cols-4 gap-3">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-16 bg-muted/20 rounded-lg animate-pulse" />
             ))}
           </div>
         </div>
@@ -128,10 +122,10 @@ export function HourlyStatsWidget({
 
   if (error || !stats) {
     return (
-      <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
-        <h3 className="text-lg font-semibold mb-4 flex-shrink-0">Hourly Movement Statistics</h3>
+      <div className="glass-card rounded-2xl p-4 h-full flex flex-col">
+        <h3 className="text-sm font-semibold mb-2 flex-shrink-0">Hourly Movement Statistics</h3>
         <div className="flex items-center justify-center flex-1">
-          <p className="text-destructive">
+          <p className="text-destructive text-sm">
             {error || "No data available"}
           </p>
         </div>
@@ -150,137 +144,93 @@ export function HourlyStatsWidget({
     .sort((a, b) => a.hourNum - b.hourNum);
 
   return (
-    <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
+    <div className="glass-card rounded-2xl p-4 h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="mb-6 flex-shrink-0">
-        <h3 className="text-lg font-semibold">{selectedAsset} Hourly Movement Statistics</h3>
-        <p className="text-sm text-muted-foreground">
-          Last 30 days • {stats.total_samples} samples
+      <div className="flex-none mb-2">
+        <h3 className="text-sm font-semibold">{selectedAsset} Hourly Stats</h3>
+        <p className="text-xs text-muted-foreground">
+          30d • {stats.total_samples} samples
         </p>
       </div>
 
-      {/* Two-column layout: Main Stats (2/3) + Extreme Moves (1/3) */}
-      <div className="flex-1 overflow-y-auto pr-2">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
-          {/* Main Stats Section - 2/3 width */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Key Metrics Grid */}
-            <div className="grid grid-cols-3 gap-4">
-              <MetricBox
-                label="Avg Hourly Return"
-                value={`${(stats.mean_return * 100).toFixed(3)}%`}
-                color={stats.mean_return > 0 ? "text-green-500" : "text-red-500"}
-              />
-              <MetricBox
-                label="Volatility (1σ)"
-                value={`${(stats.std_return * 100).toFixed(2)}%`}
-                color="text-blue-500"
-              />
-              <MetricBox
-                label="Max Move"
-                value={`${(stats.max_hourly_move * 100).toFixed(2)}%`}
-                color="text-orange-500"
-              />
-            </div>
+      {/* Key Metrics Grid */}
+      <div className="flex-none grid grid-cols-3 gap-2 mb-2">
+        <MetricBox
+          label="Avg Return"
+          value={`${(stats.mean_return * 100).toFixed(3)}%`}
+          color={stats.mean_return > 0 ? "text-cyan-400" : "text-red-400"}
+        />
+        <MetricBox
+          label="Volatility"
+          value={`${(stats.std_return * 100).toFixed(2)}%`}
+          color="text-blue-400"
+        />
+        <MetricBox
+          label="Max Move"
+          value={`${(stats.max_hourly_move * 100).toFixed(2)}%`}
+          color="text-amber-400"
+        />
+      </div>
 
-            {/* Percentiles */}
-            <div>
-              <h4 className="text-sm font-semibold mb-2">Movement Percentiles</h4>
-              <div className="flex justify-between text-xs gap-2">
-                <PercentileBox label="5th" value={stats.percentile_5} />
-                <PercentileBox label="25th" value={stats.percentile_25} />
-                <PercentileBox
-                  label="50th"
-                  value={stats.percentile_50}
-                  highlight={true}
-                />
-                <PercentileBox label="75th" value={stats.percentile_75} />
-                <PercentileBox label="95th" value={stats.percentile_95} />
-              </div>
-            </div>
-
-            {/* Hourly Pattern Chart */}
-            <div>
-              <h4 className="text-sm font-semibold mb-2">Returns by Hour (UTC)</h4>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={hourlyData}>
-                  <XAxis
-                    dataKey="hour"
-                    tick={{ fontSize: 10, fill: "#94a3b8" }}
-                    stroke="#94a3b8"
-                  />
-                  <YAxis
-                    tick={{ fontSize: 10, fill: "#94a3b8" }}
-                    stroke="#94a3b8"
-                    tickFormatter={(value) => `${value.toFixed(1)}%`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "rgba(15, 23, 42, 0.9)",
-                      border: "1px solid rgba(148, 163, 184, 0.2)",
-                      borderRadius: "8px",
-                      fontSize: 12,
-                    }}
-                    formatter={(value: number) => `${value.toFixed(3)}%`}
-                  />
-                  <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
-                  <Bar dataKey="avgReturn" fill="#10b981" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Extreme Move Probabilities - 1/3 width */}
-          {extremeData && (
-            <div className="lg:col-span-1 lg:border-l lg:pl-6">
-              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                <h4 className="text-sm font-semibold">🔥 Extreme Moves</h4>
-                <span
-                  className={`text-xs px-2 py-1 rounded ${
-                    extremeData.regime === "CRISIS"
-                      ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
-                      : extremeData.regime === "ELEVATED"
-                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
-                      : "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
-                  }`}
-                >
-                  {extremeData.regime} ({extremeData.volatility_multiplier.toFixed(2)}x)
-                </span>
-              </div>
-
-              <div className="space-y-2">
-                {Object.entries(extremeData.extreme_probabilities)
-                  .filter(([key]) =>
-                    ["move_3pct", "move_4pct", "move_5pct", "move_6pct"].includes(key)
-                  )
-                  .map(([key, data]) => (
-                    <div
-                      key={key}
-                      className="flex justify-between items-center text-xs p-2 rounded bg-secondary/50"
-                    >
-                      <span className="font-medium">
-                        &gt;{(data.threshold * 100).toFixed(0)}% move
-                      </span>
-                      <div className="flex gap-4">
-                        <span className="text-muted-foreground">
-                          {(data.probability * 100).toFixed(2)}%
-                        </span>
-                        <span className="text-muted-foreground">{data.odds}</span>
-                        <span className="text-primary font-medium">
-                          ~{data.per_week.toFixed(1)}/week
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-
-              <p className="text-xs text-muted-foreground mt-4">
-                💡 {extremeData.volatility_multiplier >= 1.5 ? "High volatility regime makes extreme moves MORE likely." : "Normal volatility - extreme moves occur at historical rates."}
-              </p>
-            </div>
-          )}
+      {/* Percentiles - compact */}
+      <div className="flex-none mb-2">
+        <div className="flex justify-between text-[10px] gap-1">
+          <PercentileBox label="5th" value={stats.percentile_5} />
+          <PercentileBox label="25th" value={stats.percentile_25} />
+          <PercentileBox label="50th" value={stats.percentile_50} highlight={true} />
+          <PercentileBox label="75th" value={stats.percentile_75} />
+          <PercentileBox label="95th" value={stats.percentile_95} />
         </div>
       </div>
+
+      {/* Hourly Pattern Chart */}
+      <div className="flex-1 min-h-0">
+        <ResponsiveContainer width="100%" height={140}>
+          <BarChart data={hourlyData} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
+            <XAxis
+              dataKey="hour"
+              tick={{ fontSize: 8, fill: "#94a3b8" }}
+              stroke="#94a3b8"
+              interval={3}
+            />
+            <YAxis
+              tick={{ fontSize: 8, fill: "#94a3b8" }}
+              stroke="#94a3b8"
+              width={30}
+              tickFormatter={(value) => `${value.toFixed(1)}%`}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "rgba(15, 23, 42, 0.9)",
+                border: "1px solid rgba(148, 163, 184, 0.2)",
+                borderRadius: "8px",
+                fontSize: 10,
+              }}
+              formatter={(value: number) => `${value.toFixed(3)}%`}
+            />
+            <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
+            <Bar dataKey="avgReturn" fill="#06b6d4" radius={[2, 2, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Extreme Moves - compact inline */}
+      {extremeData && (
+        <div className="flex-none pt-2 border-t border-border/50">
+          <div className="flex items-center justify-between text-[10px]">
+            <span className="text-muted-foreground">Extreme moves:</span>
+            <span className={`px-1.5 py-0.5 rounded text-[9px] ${
+              extremeData.regime === "CRISIS"
+                ? "bg-red-500/20 text-red-400"
+                : extremeData.regime === "ELEVATED"
+                ? "bg-amber-500/20 text-amber-400"
+                : "bg-cyan-500/20 text-cyan-400"
+            }`}>
+              {extremeData.regime} ({extremeData.volatility_multiplier.toFixed(1)}x)
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -296,8 +246,8 @@ function MetricBox({
 }) {
   return (
     <div className="text-center">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={`text-lg font-bold ${color}`}>{value}</p>
+      <p className="text-[10px] text-muted-foreground">{label}</p>
+      <p className={`text-sm font-bold ${color}`}>{value}</p>
     </div>
   );
 }
@@ -317,17 +267,17 @@ function PercentileBox({
         highlight ? "border border-primary rounded px-1 py-0.5" : ""
       }`}
     >
-      <p className={`text-xs ${highlight ? "font-bold" : "text-muted-foreground"}`}>
+      <p className={`text-[10px] ${highlight ? "font-semibold" : "text-muted-foreground"}`}>
         {label}
       </p>
       <p
-        className={`text-xs ${
+        className={`text-[10px] ${
           highlight
-            ? "font-bold"
+            ? "font-semibold"
             : value > 0
-            ? "text-green-500"
+            ? "text-cyan-400"
             : value < 0
-            ? "text-red-500"
+            ? "text-red-400"
             : ""
         }`}
       >

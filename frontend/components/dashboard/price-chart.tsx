@@ -197,23 +197,23 @@ export function PriceChart({ signals = [], height = 400 }: PriceChartProps) {
     // rsiSeriesRef.current = rsiSeries as any;
     console.log('[PriceChart] ✓ Chart initialized successfully');
 
-    // Handle resize
-    const handleResize = () => {
+    // Handle resize with ResizeObserver for proper initial sizing
+    const resizeObserver = new ResizeObserver((entries) => {
       if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-          height: chartContainerRef.current.clientHeight,
-        });
+        const { width, height } = entries[0].contentRect;
+        if (width > 0 && height > 0) {
+          chartRef.current.applyOptions({ width, height });
+        }
       }
-    };
+    });
 
-    window.addEventListener('resize', handleResize);
+    resizeObserver.observe(chartContainerRef.current);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       chart.remove();
     };
-  }, [height]);
+  }, []);
 
   // Update chart data when candles change
   useEffect(() => {
@@ -496,7 +496,7 @@ export function PriceChart({ signals = [], height = 400 }: PriceChartProps) {
         )}
       </div>
 
-      <div ref={chartContainerRef} className="flex-1 min-h-0" style={{ width: '100%' }} />
+      <div ref={chartContainerRef} className="flex-1 min-h-[200px]" style={{ width: '100%' }} />
     </div>
   );
 }

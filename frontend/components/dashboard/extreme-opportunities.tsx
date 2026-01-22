@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react"
 import { AlertTriangle, TrendingUp, TrendingDown, Target } from "lucide-react"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 
 interface Contract {
@@ -44,7 +43,7 @@ interface ExtremeMoveData {
 }
 
 export function ExtremeOpportunitiesWidget({
-  apiUrl = "http://localhost:8000",
+  apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
   refreshInterval = 30000,
 }: {
   apiUrl?: string
@@ -124,23 +123,19 @@ export function ExtremeOpportunitiesWidget({
 
   if (loading) {
     return (
-      <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
-        <h3 className="text-lg font-semibold flex items-center gap-2 mb-4 flex-shrink-0">
-          <Target className="h-5 w-5" />
-          Extreme Volatility Opportunities
+      <div className="glass-card rounded-2xl p-4 h-full flex flex-col">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-2 flex-shrink-0">
+          <Target className="h-4 w-4" />
+          Extreme Opportunities
         </h3>
-        <div className="flex-1 space-y-3">
-          {/* Skeleton opportunity cards */}
+        <div className="flex-1 min-h-0 space-y-2">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="p-3 bg-muted/10 rounded-lg space-y-2 animate-pulse">
+            <div key={i} className="p-2 bg-muted/10 rounded-lg space-y-1 animate-pulse">
               <div className="flex justify-between">
-                <div className="h-4 w-24 bg-muted/30 rounded" />
-                <div className="h-5 w-12 bg-muted/40 rounded-full" />
+                <div className="h-3 w-20 bg-muted/30 rounded" />
+                <div className="h-4 w-10 bg-muted/40 rounded-full" />
               </div>
-              <div className="flex gap-2">
-                <div className="h-3 w-16 bg-muted/20 rounded" />
-                <div className="h-3 w-20 bg-muted/20 rounded" />
-              </div>
+              <div className="h-2 w-32 bg-muted/20 rounded" />
             </div>
           ))}
         </div>
@@ -150,9 +145,11 @@ export function ExtremeOpportunitiesWidget({
 
   if (error) {
     return (
-      <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
-        <h3 className="text-lg font-semibold mb-4 flex-shrink-0">Extreme Opportunities</h3>
-        <p className="text-sm text-destructive">Error: {error}</p>
+      <div className="glass-card rounded-2xl p-4 h-full flex flex-col">
+        <h3 className="text-sm font-semibold mb-2 flex-shrink-0">Extreme Opportunities</h3>
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-xs text-destructive">Error: {error}</p>
+        </div>
       </div>
     )
   }
@@ -161,18 +158,14 @@ export function ExtremeOpportunitiesWidget({
   const regime = extremeData?.regime || "UNKNOWN"
 
   return (
-    <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
-      <div className="mb-6 flex-shrink-0">
+    <div className="glass-card rounded-2xl p-4 h-full flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex-none mb-2">
         <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold flex items-center gap-2">
-              <Target className="h-5 w-5" />
-              🎲 Extreme Volatility Opportunities
-            </h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              High-risk, high-reward contracts for volatile markets
-            </p>
-          </div>
+          <h3 className="text-sm font-semibold flex items-center gap-1.5">
+            <Target className="h-4 w-4" />
+            Extreme Opps
+          </h3>
           {regime && (
             <Badge
               variant={
@@ -182,102 +175,74 @@ export function ExtremeOpportunitiesWidget({
                     ? "default"
                     : "secondary"
               }
+              className="text-[10px] px-1.5 py-0"
             >
               {regime}
             </Badge>
           )}
         </div>
+        <p className="text-[10px] text-muted-foreground">
+          High-risk, high-reward
+        </p>
       </div>
-      <div className="flex-1 overflow-y-auto pr-2">
+
+      {/* Content */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {isExtremeVol && (
-          <Alert variant="default" className="mb-4 border-amber-500 bg-amber-50 dark:bg-amber-950">
-            <AlertTriangle className="h-4 w-4 text-amber-600" />
-            <AlertTitle className="text-amber-900 dark:text-amber-100">
-              High Volatility Detected
-            </AlertTitle>
-            <AlertDescription className="text-amber-800 dark:text-amber-200">
-              Volatility multiplier: {extremeData?.volatility_multiplier.toFixed(2)}x
-              - Extreme moves are {extremeData?.volatility_multiplier.toFixed(1)}x more
-              likely than historical average.
-            </AlertDescription>
-          </Alert>
+          <div className="mb-2 p-2 rounded-lg border border-amber-500/30 bg-amber-500/10">
+            <div className="flex items-center gap-1.5 text-amber-400 text-[10px]">
+              <AlertTriangle className="h-3 w-3" />
+              <span className="font-medium">
+                High Vol: {extremeData?.volatility_multiplier.toFixed(1)}x
+              </span>
+            </div>
+          </div>
         )}
 
         {opportunities.length === 0 ? (
-          <p className="text-center text-sm text-muted-foreground py-8">
-            No extreme opportunities available. Market conditions may not support
-            high-volatility strategies.
+          <p className="text-center text-xs text-muted-foreground py-4">
+            No extreme opportunities
           </p>
         ) : (
-          <div className="space-y-3">
-            {opportunities.map((opp) => (
+          <div className="space-y-1.5">
+            {opportunities.slice(0, 4).map((opp) => (
               <div
                 key={opp.id}
-                className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                className="p-2 rounded-lg border border-border/50 bg-card/50 hover:bg-accent/30 transition-colors"
               >
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-1.5">
                     {opp.signal_type === "BUY YES" ? (
-                      <TrendingUp className="h-4 w-4 text-green-500" />
+                      <TrendingUp className="h-3 w-3 text-cyan-400" />
                     ) : (
-                      <TrendingDown className="h-4 w-4 text-red-500" />
+                      <TrendingDown className="h-3 w-3 text-red-400" />
                     )}
-                    <span className="font-medium">{opp.ticker}</span>
-                    <Badge
-                      variant={opp.signal_type === "BUY YES" ? "default" : "destructive"}
-                      className="text-xs"
-                    >
-                      {opp.signal_type}
-                    </Badge>
+                    <span className="text-xs font-medium truncate max-w-[80px]">
+                      {opp.ticker.split("-").pop()}
+                    </span>
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    Strike: ${opp.strike_price?.toLocaleString()} | Need:{" "}
-                    {opp.required_move_pct >= 0 ? "+" : ""}
-                    {opp.required_move_pct.toFixed(2)}% move
-                  </div>
+                  <span className="text-xs font-bold text-primary">
+                    {opp.payoff_multiplier.toFixed(1)}x
+                  </span>
                 </div>
-
-                <div className="flex gap-6 items-center">
-                  <div className="text-right">
-                    <div className="text-xs text-muted-foreground">Entry</div>
-                    <div className="font-semibold">
-                      {(opp.entry_price * 100).toFixed(0)}¢
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    <div className="text-xs text-muted-foreground">Target</div>
-                    <div className="font-semibold text-green-600">
-                      {(opp.target_price * 100).toFixed(0)}¢
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    <div className="text-xs text-muted-foreground">Payoff</div>
-                    <div className="font-bold text-primary">
-                      {opp.payoff_multiplier.toFixed(1)}x
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    <div className="text-xs text-muted-foreground">Implied%</div>
-                    <div className="font-medium">
-                      {((opp.implied_probability || 0) * 100).toFixed(0)}%
-                    </div>
-                  </div>
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>
+                    {opp.required_move_pct >= 0 ? "+" : ""}
+                    {opp.required_move_pct.toFixed(1)}% move
+                  </span>
+                  <span>{((opp.implied_probability || 0) * 100).toFixed(0)}% implied</span>
                 </div>
               </div>
             ))}
           </div>
         )}
+      </div>
 
-        <Alert variant="default" className="mt-4 border-blue-500 bg-blue-50 dark:bg-blue-950">
-          <AlertDescription className="text-xs text-blue-900 dark:text-blue-100">
-            ⚠️ <strong>Risk Warning:</strong> These require extreme moves ({">"} 3%). Enter
-            as resting orders at 8-12¢ to pay zero fees. Cancel immediately if price moves
-            against you. Risk: $10-15 per trade. Reward: $50-100+ if strike hit.
-          </AlertDescription>
-        </Alert>
+      {/* Footer tip */}
+      <div className="flex-none pt-2 border-t border-border/50 mt-2">
+        <p className="text-[9px] text-muted-foreground">
+          Enter at 8-12¢ for zero fees
+        </p>
       </div>
     </div>
   )

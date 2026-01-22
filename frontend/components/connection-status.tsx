@@ -2,48 +2,48 @@
 
 import { useRealtimeStore, ConnectionState } from "@/lib/stores/realtime-store";
 import { Badge } from "@/components/ui/badge";
-import { Wifi, WifiOff, RefreshCw, AlertCircle } from "lucide-react";
 
 /**
  * Connection Status Indicator
  *
- * Displays current SSE connection state with appropriate icon and color
+ * Displays current SSE connection state with appropriate icon and color.
+ * Uses Iconify icons via Tailwind CSS plugin.
  */
 
 const connectionConfig: Record<ConnectionState, {
   label: string;
   variant: "default" | "destructive" | "outline" | "secondary";
-  icon: React.ReactNode;
+  iconClass: string;
   className: string;
 }> = {
   disconnected: {
     label: "Disconnected",
     variant: "outline",
-    icon: <WifiOff className="h-3 w-3" />,
+    iconClass: "icon-[lucide--wifi-off] h-3 w-3",
     className: "text-gray-500",
   },
   connecting: {
     label: "Connecting",
     variant: "secondary",
-    icon: <RefreshCw className="h-3 w-3 animate-spin" />,
+    iconClass: "icon-[lucide--refresh-cw] h-3 w-3 animate-spin",
     className: "text-blue-500",
   },
   connected: {
     label: "Connected",
     variant: "default",
-    icon: <Wifi className="h-3 w-3" />,
+    iconClass: "icon-[lucide--wifi] h-3 w-3",
     className: "text-green-500 bg-green-500/10",
   },
   reconnecting: {
     label: "Reconnecting",
     variant: "secondary",
-    icon: <RefreshCw className="h-3 w-3 animate-spin" />,
+    iconClass: "icon-[lucide--refresh-cw] h-3 w-3 animate-spin",
     className: "text-yellow-500",
   },
   error: {
     label: "Error",
     variant: "destructive",
-    icon: <AlertCircle className="h-3 w-3" />,
+    iconClass: "icon-[lucide--alert-circle] h-3 w-3",
     className: "text-red-500",
   },
 };
@@ -63,7 +63,7 @@ export function ConnectionStatus({ showLabel = true, showError = false }: Connec
   return (
     <div className="flex items-center gap-2">
       <Badge variant={config.variant} className={`${config.className} gap-1.5`}>
-        {config.icon}
+        <i className={config.iconClass} />
         {showLabel && <span className="text-xs font-medium">{config.label}</span>}
       </Badge>
 
