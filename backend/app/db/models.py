@@ -9,6 +9,24 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.database import Base
 
 
+class User(Base):
+    """User authenticated via Privy with Solana wallet."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    privy_user_id: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    wallet_address: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+
+
 class Contract(Base):
     """Kalshi contract information."""
 

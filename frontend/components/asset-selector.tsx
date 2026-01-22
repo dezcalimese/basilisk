@@ -1,19 +1,21 @@
 "use client";
 
+import Image from "next/image";
 import { useMultiAssetStore, type Asset } from "@/lib/stores/multi-asset-store";
 import { cn } from "@/lib/utils";
 
 /**
  * Asset selector toggle buttons
  *
- * Allows users to switch between BTC, ETH, and XRP
- * Displays active asset with visual feedback
+ * Allows users to switch between BTC, ETH, XRP, and SOL
+ * Displays active asset with visual feedback and token logos
  */
 
-const ASSETS: Array<{ symbol: Asset; name: string; color: string }> = [
-  { symbol: 'BTC', name: 'Bitcoin', color: 'bg-orange-500/10 border-orange-500 text-orange-500' },
-  { symbol: 'ETH', name: 'Ethereum', color: 'bg-blue-500/10 border-blue-500 text-blue-500' },
-  { symbol: 'XRP', name: 'Ripple', color: 'bg-green-500/10 border-green-500 text-green-500' },
+const ASSETS: Array<{ symbol: Asset; name: string }> = [
+  { symbol: 'BTC', name: 'Bitcoin' },
+  { symbol: 'ETH', name: 'Ethereum' },
+  { symbol: 'XRP', name: 'Ripple' },
+  { symbol: 'SOL', name: 'Solana' },
 ];
 
 export function AssetSelector() {
@@ -21,13 +23,13 @@ export function AssetSelector() {
   const selectAsset = useMultiAssetStore((state) => state.selectAsset);
 
   return (
-    <div className="flex gap-2 p-1 bg-muted/30 rounded-lg border border-border/50">
+    <div className="flex gap-1 p-1 bg-muted/30 rounded-lg border border-border/50">
       {ASSETS.map(({ symbol, name }) => (
         <button
           key={symbol}
           onClick={() => selectAsset(symbol)}
           className={cn(
-            "px-4 py-2 rounded-md transition-all font-medium text-sm",
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all font-medium text-sm",
             "hover:bg-muted-foreground/10",
             selectedAsset === symbol
               ? "bg-primary text-primary-foreground shadow-sm"
@@ -35,6 +37,13 @@ export function AssetSelector() {
           )}
           title={`Switch to ${name}`}
         >
+          <Image
+            src={`/tokens/${symbol.toLowerCase()}.svg`}
+            alt={name}
+            width={16}
+            height={16}
+            className="rounded-full"
+          />
           {symbol}
         </button>
       ))}

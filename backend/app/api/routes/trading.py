@@ -1,4 +1,9 @@
-"""Trading API routes for executing trades and managing positions."""
+"""Trading API routes for executing trades and managing positions.
+
+This module supports both:
+- Legacy Kalshi API trading (server-side execution)
+- DFlow Solana trading (client-side wallet signing)
+"""
 
 from datetime import datetime
 from typing import Optional
@@ -8,8 +13,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
+from app.core.privy_auth import get_current_user, get_current_user_optional
+from app.data.dflow_client import get_dflow_client
+from app.data.dflow_types import QuoteRequest, SwapRequest
 from app.db.database import get_db
-from app.db.models import Trade
+from app.db.models import Trade, User
 from app.services.trade_executor import TradeExecutor, TradeRequest
 
 router = APIRouter(prefix="/trade", tags=["trading"])
@@ -339,5 +348,190 @@ async def get_balance(
     try:
         balance = await executor.kalshi.get_balance()
         return balance
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# DFlow Solana Trading Endpoints
+# ============================================================
+
+
+class DFlowQuoteRequest(BaseModel):
+    """Request for a DFlow swap quote."""
+
+    input_mint: str = Field(..., description="Input token mint address")
+    output_mint: str = Field(..., description="Output token mint address")
+    amount: int = Field(..., description="Amount in token units")
+    side: str = Field(default="buy", pattern="^(buy|sell)$")
+    slippage_bps: int = Field(default=50, ge=1, le=500)
+
+
+class DFlowSwapRequest(BaseModel):
+    """Request to create a DFlow swap transaction."""
+
+    quote_id: str = Field(..., description="Quote ID from get_quote")
+    user_wallet: str = Field(..., description="User's Solana wallet address")
+
+
+@router.post("/quote")
+async def get_dflow_quote(
+    request: DFlowQuoteRequest,
+    user: Optional[User] = Depends(get_current_user_optional),
+) -> dict:
+    """
+    Get a quote for swapping tokens via DFlow.
+
+    Returns quote with price, output amount, fees, and expiration.
+    The quote can be used to create a swap transaction.
+    """
+    if not settings.dflow_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="DFlow trading not configured",
+        )
+
+    client = get_dflow_client()
+
+    try:
+        quote = await client.get_quote(
+            QuoteRequest(
+                input_mint=request.input_mint,
+                output_mint=request.output_mint,
+                amount=request.amount,
+                side=request.side,
+                slippage_bps=request.slippage_bps,
+            )
+        )
+
+        return {
+            "quote_id": quote.quote_id,
+            "input_mint": quote.input_mint,
+            "output_mint": quote.output_mint,
+            "input_amount": quote.input_amount,
+            "output_amount": quote.output_amount,
+            "price": quote.price,
+            "price_impact": quote.price_impact,
+            "fee": quote.fee,
+            "expires_at": quote.expires_at.isoformat(),
+            "slippage_bps": quote.slippage_bps,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/swap")
+async def create_dflow_swap(
+    request: DFlowSwapRequest,
+    user: User = Depends(get_current_user),
+) -> dict:
+    """
+    Create an unsigned swap transaction.
+
+    Requires authentication. The user must sign the returned transaction
+    with their wallet and broadcast it to Solana.
+    """
+    if not settings.dflow_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="DFlow trading not configured",
+        )
+
+    # Verify wallet matches authenticated user
+    if user.wallet_address and user.wallet_address != request.user_wallet:
+        raise HTTPException(
+            status_code=403,
+            detail="Wallet address does not match authenticated user",
+        )
+
+    client = get_dflow_client()
+
+    try:
+        swap = await client.create_swap(
+            SwapRequest(
+                quote_id=request.quote_id,
+                user_wallet=request.user_wallet,
+            )
+        )
+
+        return {
+            "quote_id": swap.quote_id,
+            "transaction": swap.transaction,
+            "order_id": swap.order_id,
+            "expires_at": swap.expires_at.isoformat(),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/orders/{order_id}")
+async def get_dflow_order_status(
+    order_id: str,
+    user: Optional[User] = Depends(get_current_user_optional),
+) -> dict:
+    """
+    Get the status of a DFlow order.
+
+    Returns fill status, transaction signature, and other details.
+    """
+    if not settings.dflow_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="DFlow trading not configured",
+        )
+
+    client = get_dflow_client()
+
+    try:
+        status = await client.get_order_status(order_id)
+
+        return {
+            "order_id": status.order_id,
+            "quote_id": status.quote_id,
+            "status": status.status,
+            "input_mint": status.input_mint,
+            "output_mint": status.output_mint,
+            "input_amount": status.input_amount,
+            "output_amount": status.output_amount,
+            "filled_amount": status.filled_amount,
+            "average_price": status.average_price,
+            "transaction_signature": status.transaction_signature,
+            "created_at": status.created_at.isoformat(),
+            "updated_at": status.updated_at.isoformat(),
+            "filled_at": status.filled_at.isoformat() if status.filled_at else None,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/markets/{ticker}/mints")
+async def get_market_mints(ticker: str) -> dict:
+    """
+    Get YES/NO token mints for a market.
+
+    These mints are needed for creating swap transactions.
+    """
+    if not settings.dflow_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="DFlow trading not configured",
+        )
+
+    client = get_dflow_client()
+
+    try:
+        mints = await client.get_market_mints(ticker)
+        if not mints:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Market {ticker} not found on DFlow",
+            )
+
+        return {
+            "yes_mint": mints["yes_mint"],
+            "no_mint": mints["no_mint"],
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRealtimeStore, ConnectionState } from "@/lib/stores/realtime-store";
+import { useMultiAssetStore, type ConnectionState } from "@/lib/stores/multi-asset-store";
 import { Badge } from "@/components/ui/badge";
 
 /**
@@ -54,9 +54,9 @@ interface ConnectionStatusProps {
 }
 
 export function ConnectionStatus({ showLabel = true, showError = false }: ConnectionStatusProps) {
-  const connectionState = useRealtimeStore((state) => state.connectionState);
-  const connectionError = useRealtimeStore((state) => state.connectionError);
-  const lastConnectionTime = useRealtimeStore((state) => state.lastConnectionTime);
+  const connectionState = useMultiAssetStore((state) => state.assetConnections[state.selectedAsset].state);
+  const connectionError = useMultiAssetStore((state) => state.assetConnections[state.selectedAsset].error);
+  const lastConnectionTime = useMultiAssetStore((state) => state.assetConnections[state.selectedAsset].lastConnectionTime);
 
   const config = connectionConfig[connectionState];
 

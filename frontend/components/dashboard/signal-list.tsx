@@ -9,11 +9,10 @@ import { useMemo, useState, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAnimatedNumber } from "@/hooks/use-animated-number";
-import { useRealtimeStore } from "@/lib/stores/realtime-store";
-import { useAnalyticalStore } from "@/lib/stores/analytical-store";
-import { api, type TradeSignal, type TradeResponse } from "@/lib/api";
+import { useRealtimeStore, useAnalyticalStore } from "@/lib/stores/multi-asset-store";
+import { type TradeSignal } from "@/lib/api";
 import { GreeksProfile, calculateGreeksForSignal } from "@/components/dashboard/greeks-profile";
-import { TradeModal, type TradeOrder } from "@/components/trading/trade-modal";
+import { TradeModal } from "@/components/trading/trade-modal";
 
 interface SignalListProps {
   signals: TradeSignal[];
@@ -115,85 +114,22 @@ function parseTickerInfo(ticker: string, expiryTime?: string) {
   };
 }
 
-/**
- * Extract asset type from Kalshi ticker (e.g., KXBTCD-... -> BTC)
- */
-function extractAssetFromTicker(ticker: string): "BTC" | "ETH" | "XRP" {
-  if (ticker.startsWith("KXBTC")) return "BTC";
-  if (ticker.startsWith("KXETH")) return "ETH";
-  if (ticker.startsWith("KXXRP")) return "XRP";
-  return "BTC"; // Default
-}
-
-/**
- * Extract strike price from ticker or signal
- */
-function extractStrike(ticker: string, signal: TradeSignal): number {
-  if (signal.strike_price) return signal.strike_price;
-  const match = ticker.match(/[TAB]([\d.]+)/);
-  return match ? parseFloat(match[1]) : 0;
-}
-
 export function SignalList({ signals, currentTime, selectedTicker, onSelectSignal }: SignalListProps) {
   // Trade modal state
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [selectedSignalForTrade, setSelectedSignalForTrade] = useState<TradeSignal | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [tradeResult, setTradeResult] = useState<TradeResponse | null>(null);
-  const [tradeError, setTradeError] = useState<string | null>(null);
 
   // Filter out HOLD signals - only show actionable trades
   const actionableSignals = signals.filter(signal => signal.signal_type !== "HOLD");
 
   const handleOpenTradeModal = (signal: TradeSignal) => {
     setSelectedSignalForTrade(signal);
-    setTradeResult(null);
-    setTradeError(null);
     setTradeModalOpen(true);
   };
 
   const handleCloseModal = useCallback(() => {
     setTradeModalOpen(false);
-    setTradeResult(null);
-    setTradeError(null);
   }, []);
-
-  const handleTradeSubmit = useCallback(async (order: TradeOrder) => {
-    if (!selectedSignalForTrade) return;
-
-    setIsSubmitting(true);
-    setTradeError(null);
-    setTradeResult(null);
-
-    try {
-      const result = await api.executeTrade({
-        ticker: order.ticker,
-        asset: extractAssetFromTicker(order.ticker),
-        direction: order.side.toUpperCase() as "YES" | "NO",
-        strike: extractStrike(order.ticker, selectedSignalForTrade),
-        contracts: order.quantity,
-        order_type: order.orderType,
-        limit_price: order.limitPrice,
-        signal_id: selectedSignalForTrade.id?.toString(),
-      });
-
-      setTradeResult(result);
-
-      if (result.success) {
-        // Auto-close after successful trade
-        setTimeout(() => {
-          handleCloseModal();
-        }, 2000);
-      } else {
-        setTradeError(result.error || "Trade failed");
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to execute trade";
-      setTradeError(message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [selectedSignalForTrade, handleCloseModal]);
 
   if (actionableSignals.length === 0) {
     return (
@@ -209,7 +145,7 @@ export function SignalList({ signals, currentTime, selectedTicker, onSelectSigna
   return (
     <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
       <h2 className="text-lg font-bold mb-3">Active Signals</h2>
-      <div className="space-y-3 overflow-y-auto flex-1 pr-2">
+      <div className="space-y-3 overflow-y-auto flex-1 pr-2 pt-1">
         {actionableSignals.map((signal) => (
           <SignalRow
             key={signal.id}
@@ -222,15 +158,11 @@ export function SignalList({ signals, currentTime, selectedTicker, onSelectSigna
         ))}
       </div>
 
-      {/* Trade Modal */}
+      {/* Trade Modal - Now handles trading internally via wallet */}
       <TradeModal
         signal={selectedSignalForTrade}
         isOpen={tradeModalOpen}
         onClose={handleCloseModal}
-        onSubmit={handleTradeSubmit}
-        isSubmitting={isSubmitting}
-        tradeResult={tradeResult}
-        tradeError={tradeError}
       />
     </div>
   );
@@ -251,8 +183,8 @@ function SignalRow({ signal, currentTime, isSelected, onSelect, onTrade }: Signa
   const animatedNo = useAnimatedNumber(signal.no_price ?? 0, 500);
 
   // Get current BTC price and volatility for Greeks calculation
-  const currentBtcPrice = useRealtimeStore((state) => state.currentPrice);
-  const volatility = useAnalyticalStore((state) => state.volatility);
+  const { currentPrice: currentBtcPrice } = useRealtimeStore();
+  const { volatility } = useAnalyticalStore();
 
   const timeRemainingLabel = useMemo(() => {
     return formatTimeRemaining(currentTime, signal.expiry_time, signal.time_to_expiry_hours);
@@ -383,7 +315,7 @@ function SignalRow({ signal, currentTime, isSelected, onSelect, onTrade }: Signa
               {(signal.confidence_score * 100).toFixed(0)}% confidence
             </div>
             {signal.model_probability !== undefined && (
-              <div className="text-xs text-cyan-500 mt-1 font-medium">
+              <div className="text-xs text-primary mt-1 font-medium">
                 Model: {(signal.model_probability * 100).toFixed(1)}%
               </div>
             )}

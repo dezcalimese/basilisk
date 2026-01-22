@@ -11,6 +11,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { useMultiAssetStore } from "@/lib/stores/multi-asset-store";
+import { fetchWithRetry } from "@/lib/fetch-with-retry";
 
 interface VolSkewData {
   atm_iv: number;
@@ -52,28 +53,49 @@ export function VolatilitySkewChart({
   const selectedAsset = useMultiAssetStore((state) => state.selectedAsset);
 
   useEffect(() => {
+    let mounted = true;
+    let interval: NodeJS.Timeout | null = null;
+
     const fetchSkew = async () => {
       try {
-        setLoading(true);
-        const response = await fetch(`${apiUrl}/api/v1/volatility/skew?asset=${selectedAsset.toLowerCase()}`);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+        if (mounted && !skewData) {
+          setLoading(true);
         }
-        const data = await response.json();
-        setSkewData(data);
-        setError(null);
+
+        const data = await fetchWithRetry<VolSkewData>(
+          `${apiUrl}/api/v1/volatility/skew?asset=${selectedAsset.toLowerCase()}`,
+          {
+            maxRetries: 5,
+            initialDelay: 500,
+            onRetry: (attempt, error) => {
+              console.log(`[VolSkew] Retry ${attempt}:`, error.message);
+            },
+          }
+        );
+
+        if (mounted) {
+          setSkewData(data);
+          setError(null);
+        }
       } catch (err) {
         console.error("Failed to fetch volatility skew:", err);
-        setError(err instanceof Error ? err.message : "Failed to load");
+        if (mounted) {
+          setError(err instanceof Error ? err.message : "Failed to load");
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchSkew();
-    const interval = setInterval(fetchSkew, refreshInterval);
+    interval = setInterval(fetchSkew, refreshInterval);
 
-    return () => clearInterval(interval);
+    return () => {
+      mounted = false;
+      if (interval) clearInterval(interval);
+    };
   }, [apiUrl, refreshInterval, selectedAsset]);
 
   if (loading) {
@@ -169,11 +191,13 @@ export function VolatilitySkewChart({
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: "rgba(15, 23, 42, 0.9)",
+                backgroundColor: "rgba(15, 23, 42, 0.95)",
                 border: "1px solid rgba(148, 163, 184, 0.2)",
                 borderRadius: "8px",
                 fontSize: 11,
               }}
+              labelStyle={{ color: "#94a3b8" }}
+              itemStyle={{ color: "#e2e8f0" }}
               formatter={(value: number) => `${value.toFixed(1)}%`}
               labelFormatter={(label) => `Moneyness: ${label}`}
             />
@@ -226,7 +250,7 @@ function SkewMetric({ skew }: { skew: number }) {
     skew > 0.1
       ? "text-red-400"
       : skew < -0.1
-      ? "text-cyan-400"
+      ? "text-[#4AADD8]"
       : "text-amber-400";
   return (
     <div className="text-center">

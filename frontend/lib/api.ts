@@ -22,6 +22,9 @@ export interface TradeSignal {
   no_price?: number;
   implied_probability?: number;
   model_probability?: number;
+  // DFlow token mints (for Solana trading)
+  yes_mint?: string;
+  no_mint?: string;
   // Greeks (Black-Scholes sensitivity metrics)
   greeks?: {
     price: number;      // Theoretical fair value (0-1)

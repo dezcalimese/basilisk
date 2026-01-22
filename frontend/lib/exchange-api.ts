@@ -16,14 +16,15 @@
  */
 
 import { useMultiAssetStore, type CandleData, type Asset } from './stores/multi-asset-store';
+import { fetchWithRetry } from './fetch-with-retry';
 
 class ExchangeAPIClient {
   private pollTimer: NodeJS.Timeout | null = null;
   private isPolling = false;
   private interval = '1m'; // 1 minute candles
-  private lastCandleTimestamp: Record<Asset, number> = { BTC: 0, ETH: 0, XRP: 0 };
+  private lastCandleTimestamp: Record<Asset, number> = { BTC: 0, ETH: 0, XRP: 0, SOL: 0 };
   private consecutiveErrors = 0;
-  private maxRetries = 3;
+  private maxRetries = 5; // Increased retries
   private baseUrl: string;
 
   constructor(baseUrl: string = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000') {
@@ -58,24 +59,21 @@ class ExchangeAPIClient {
   private async fetchCandles(): Promise<void> {
     const store = useMultiAssetStore.getState();
     const asset = store.selectedAsset;
-    const symbol = asset === 'BTC' ? 'btcusd' : asset === 'ETH' ? 'ethusd' : 'xrpusd';
+    const symbolMap: Record<Asset, string> = { BTC: 'btcusd', ETH: 'ethusd', XRP: 'xrpusd', SOL: 'solusd' };
+    const symbol = symbolMap[asset];
 
     try {
       const url = `${this.baseUrl}/api/v1/candles/${symbol}?interval=${this.interval}&limit=500`;
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
+      // Use fetchWithRetry for reliability
+      const candles = await fetchWithRetry<any[]>(url, {
+        maxRetries: 5,
+        initialDelay: 500,
+        timeout: 15000,
+        onRetry: (attempt, error) => {
+          console.log(`[Exchange API] Retry ${attempt} for ${asset}:`, error.message);
         },
-        signal: AbortSignal.timeout(10000), // 10 second timeout
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const candles = await response.json();
 
       if (!candles || candles.length === 0) {
         console.warn(`[Exchange API] No candle data received for ${asset}`);

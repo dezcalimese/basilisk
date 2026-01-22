@@ -6,9 +6,12 @@ import { X, HelpCircle } from "lucide-react";
 export function HelpDialog() {
   const [isOpen, setIsOpen] = useState(false);
 
-  // Keyboard shortcut
+  // Keyboard shortcut (ignore if modifier keys are pressed)
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
+      // Don't trigger on Cmd+H, Ctrl+H, etc.
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
       if (e.key === "h" || e.key === "H" || e.key === "?") {
         setIsOpen((prev) => !prev);
       }

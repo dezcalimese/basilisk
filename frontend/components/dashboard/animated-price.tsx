@@ -60,7 +60,7 @@ export function AnimatedPrice({ price, decimals = 2, className }: AnimatedPriceP
         className={`font-bold transition-all duration-300 ${className || "text-2xl"} ${
           isAnimating
             ? priceDirection === "up"
-              ? "text-cyan-500"
+              ? "text-primary"
               : "text-red-500"
             : ""
         }`}
@@ -73,7 +73,7 @@ export function AnimatedPrice({ price, decimals = 2, className }: AnimatedPriceP
       {isAnimating && (
         <span
           className={`text-sm animate-bounce ${
-            priceDirection === "up" ? "text-cyan-500" : "text-red-500"
+            priceDirection === "up" ? "text-primary" : "text-red-500"
           }`}
         >
           {priceDirection === "up" ? "↑" : "↓"}

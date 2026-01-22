@@ -94,6 +94,12 @@ async def fetch_from_ccxt(asset: str, interval: str, limit: int) -> List[Any]:
             {"id": "bitfinex", "symbol": "XRP/USD"},
             {"id": "bybit", "symbol": "XRP/USDT"},
         ],
+        "SOL": [
+            {"id": "kraken", "symbol": "SOL/USD"},
+            {"id": "coinbase", "symbol": "SOL/USD"},
+            {"id": "bitfinex", "symbol": "SOL/USD"},
+            {"id": "bybit", "symbol": "SOL/USDT"},
+        ],
     }
 
     exchanges_to_try = ASSET_EXCHANGES.get(asset.upper(), ASSET_EXCHANGES["BTC"])
@@ -213,3 +219,17 @@ async def get_xrp_candles(
         List of candles in format: [timestamp, open, high, low, close, volume]
     """
     return await _get_candles("XRP", interval, limit)
+
+
+@router.get("/candles/solusd")
+async def get_sol_candles(
+    interval: str = Query(default="1m", description="Candle interval (1m, 5m, 15m, 1h, 4h, 1d)"),
+    limit: int = Query(default=500, ge=1, le=1000, description="Number of candles to return"),
+) -> List[Any]:
+    """
+    Fetch SOL/USD candlestick data with multi-exchange fallback.
+
+    Returns:
+        List of candles in format: [timestamp, open, high, low, close, volume]
+    """
+    return await _get_candles("SOL", interval, limit)

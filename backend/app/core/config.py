@@ -65,5 +65,16 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379"
 
+    # Privy Authentication
+    privy_app_id: str = ""
+    privy_verification_key: str = ""  # ES256 public key for JWT verification
+
+    # DFlow API
+    dflow_api_key: str = ""
+    dflow_base_url: str = "https://pond.dflow.net/api/v1"
+
+    # Solana
+    solana_rpc_url: str = "https://api.mainnet-beta.solana.com"
+
 
 settings = Settings()

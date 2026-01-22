@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { AlertTriangle, TrendingUp, TrendingDown, Target } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { fetchWithRetry } from "@/lib/fetch-with-retry"
 
 interface Contract {
   id: number
@@ -55,17 +56,34 @@ export function ExtremeOpportunitiesWidget({
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let mounted = true;
+
     const fetchData = async () => {
       try {
-        // Fetch current signals
-        const signalsRes = await fetch(`${apiUrl}/api/v1/current`)
-        const signalsData = await signalsRes.json()
+        // Fetch current signals with retry
+        const signalsData = await fetchWithRetry<{ contracts: Contract[] }>(
+          `${apiUrl}/api/v1/current`,
+          {
+            maxRetries: 5,
+            initialDelay: 500,
+            onRetry: (attempt, error) => {
+              console.log(`[ExtremeOpps] Retry ${attempt}:`, error.message);
+            },
+          }
+        );
 
-        // Fetch extreme move probabilities
-        const extremeRes = await fetch(`${apiUrl}/api/v1/statistics/extreme-moves?hours=720`)
-        const extremeMovesData = await extremeRes.json()
+        if (!mounted) return;
 
-        setExtremeData(extremeMovesData)
+        // Fetch extreme move probabilities (optional)
+        try {
+          const extremeMovesData = await fetchWithRetry<ExtremeMoveData>(
+            `${apiUrl}/api/v1/statistics/extreme-moves?hours=720`,
+            { maxRetries: 3, initialDelay: 500 }
+          );
+          if (mounted) setExtremeData(extremeMovesData);
+        } catch {
+          console.log('[ExtremeOpps] Extreme data not available');
+        }
 
         // Filter and enhance contracts for extreme opportunities
         const contracts: Contract[] = signalsData.contracts || []
@@ -107,18 +125,25 @@ export function ExtremeOpportunitiesWidget({
           .sort((a, b) => b.payoff_multiplier - a.payoff_multiplier)
           .slice(0, 6) // Top 6 opportunities
 
-        setOpportunities(extremeOps)
-        setLoading(false)
-        setError(null)
+        if (mounted) {
+          setOpportunities(extremeOps)
+          setLoading(false)
+          setError(null)
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to fetch data")
-        setLoading(false)
+        if (mounted) {
+          setError(err instanceof Error ? err.message : "Failed to fetch data")
+          setLoading(false)
+        }
       }
     }
 
     fetchData()
     const interval = setInterval(fetchData, refreshInterval)
-    return () => clearInterval(interval)
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    }
   }, [apiUrl, refreshInterval])
 
   if (loading) {
@@ -213,7 +238,7 @@ export function ExtremeOpportunitiesWidget({
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-1.5">
                     {opp.signal_type === "BUY YES" ? (
-                      <TrendingUp className="h-3 w-3 text-cyan-400" />
+                      <TrendingUp className="h-3 w-3 text-[#4AADD8]" />
                     ) : (
                       <TrendingDown className="h-3 w-3 text-red-400" />
                     )}

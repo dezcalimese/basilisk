@@ -49,10 +49,12 @@ export function PriceChart({ signals = [], height = 400 }: PriceChartProps) {
   // Debug: Log when candles change
   useEffect(() => {
     console.log(`[PriceChart] Candles updated: ${candles.length} candles in store`);
-    // if (enabledIndicators.has('rsi') && rsiValues.length > 0) {
-    //   console.log(`[PriceChart] RSI calculated: ${rsiValues.filter(v => v !== undefined).length} values`);
-    // }
-  }, [candles.length]);
+    if (candles.length > 0) {
+      const first = candles[0];
+      const last = candles[candles.length - 1];
+      console.log(`[PriceChart] First candle: ${new Date(first.timestamp).toISOString()}, Last: ${new Date(last.timestamp).toISOString()}`);
+    }
+  }, [candles, candles.length]);
 
   // Use SSE stream price for current price line (syncs with header)
   // Fall back to candle price if SSE price not available
@@ -68,7 +70,8 @@ export function PriceChart({ signals = [], height = 400 }: PriceChartProps) {
       return;
     }
 
-    console.log('[PriceChart] Initializing chart...');
+    const { clientWidth, clientHeight } = chartContainerRef.current;
+    console.log(`[PriceChart] Initializing chart... container: ${clientWidth}x${clientHeight}`);
 
     const chart = createChart(chartContainerRef.current, {
       layout: {
@@ -240,7 +243,11 @@ export function PriceChart({ signals = [], height = 400 }: PriceChartProps) {
       (candle) => candle.timestamp >= now - rangeMs
     );
 
-    console.log(`[PriceChart] Displaying ${filteredCandles.length} candles (${timeRange} range)`);
+    console.log(`[PriceChart] Displaying ${filteredCandles.length} of ${candles.length} candles (${timeRange} range)`);
+    if (filteredCandles.length === 0 && candles.length > 0) {
+      console.warn(`[PriceChart] All candles filtered out! Time range: ${timeRange}, now: ${now}, cutoff: ${now - rangeMs}`);
+      console.warn(`[PriceChart] Candle timestamps: first=${candles[0].timestamp}, last=${candles[candles.length-1].timestamp}`);
+    }
 
     // Convert to lightweight-charts format
     const candleData = filteredCandles.map((candle) => ({

@@ -16,7 +16,9 @@ interface AssetConnection {
   eventSource: EventSource;
   disconnectTimer: NodeJS.Timeout | null;
   reconnectTimer: NodeJS.Timeout | null;
+  connectionTimeoutTimer: NodeJS.Timeout | null;
   reconnectAttempts: number;
+  hasReceivedData: boolean;
 }
 
 class MultiAssetSSEManager {
@@ -24,6 +26,8 @@ class MultiAssetSSEManager {
   private activeAsset: Asset | null = null;
   private lastActiveAsset: Asset | null = null;
   private maxReconnectDelay = 30000; // 30s
+  private initialReconnectDelay = 500; // Fast initial retry
+  private connectionTimeout = 10000; // 10s to establish connection
   private idleDisconnectDelay = 60000; // 60s grace period
   private baseUrl = 'http://localhost:8000';
 
@@ -63,8 +67,19 @@ class MultiAssetSSEManager {
         eventSource,
         disconnectTimer: null,
         reconnectTimer: null,
+        connectionTimeoutTimer: null,
         reconnectAttempts: 0,
+        hasReceivedData: false,
       };
+
+      // Setup connection timeout - if no data received within timeout, retry
+      connection.connectionTimeoutTimer = setTimeout(() => {
+        if (!connection.hasReceivedData) {
+          console.log(`[SSE Multi] Connection timeout for ${asset} - no data received`);
+          useMultiAssetStore.getState().setConnectionState(asset, 'error', 'Connection timeout');
+          this.scheduleReconnect(asset);
+        }
+      }, this.connectionTimeout);
 
       // Setup event listeners
       this.setupAssetListeners(eventSource, asset, connection);
@@ -102,23 +117,40 @@ class MultiAssetSSEManager {
   }
 
   private setupAssetListeners(es: EventSource, asset: Asset, connection: AssetConnection): void {
+    // Helper to mark data received and clear connection timeout
+    const markDataReceived = () => {
+      if (!connection.hasReceivedData) {
+        connection.hasReceivedData = true;
+        if (connection.connectionTimeoutTimer) {
+          clearTimeout(connection.connectionTimeoutTimer);
+          connection.connectionTimeoutTimer = null;
+        }
+        // Reset reconnect attempts on successful data
+        connection.reconnectAttempts = 0;
+      }
+    };
+
     // Connection events
     es.onopen = () => {
       console.log(`[SSE Multi] ✓ ${asset} connected`);
-      connection.reconnectAttempts = 0;
       useMultiAssetStore.getState().setConnectionState(asset, 'connected');
     };
 
-    es.onerror = (error) => {
-      console.error(`[SSE Multi] ${asset} error:`, error);
+    es.onerror = () => {
+      console.warn(`[SSE Multi] ${asset} connection error - backend may be unavailable`);
       useMultiAssetStore.getState().setConnectionState(asset, 'error', 'Connection lost');
       this.scheduleReconnect(asset);
     };
 
     // Connected event
     es.addEventListener('connected', (event) => {
-      const data = JSON.parse(event.data);
-      console.log(`[SSE Multi] ✓ ${asset} connected event:`, data);
+      try {
+        const data = JSON.parse(event.data);
+        console.log(`[SSE Multi] ✓ ${asset} connected event:`, data);
+        markDataReceived();
+      } catch (err) {
+        console.error(`[SSE Multi] Error parsing connected event:`, err);
+      }
     });
 
     // Asset price updates (dynamic event name: btc_price, eth_price, xrp_price)
@@ -127,6 +159,7 @@ class MultiAssetSSEManager {
         const data = JSON.parse(event.data);
         const { price, timestamp } = data;
         useMultiAssetStore.getState().setPrice(asset, price, timestamp);
+        markDataReceived();
       } catch (err) {
         console.error(`[SSE Multi] Error parsing ${asset} price:`, err);
       }
@@ -139,6 +172,7 @@ class MultiAssetSSEManager {
         const { contracts, volatility } = data;
         console.log(`[SSE Multi] ✓ ${asset} contracts: ${contracts.length} signals`);
         useMultiAssetStore.getState().setSignals(asset, contracts, volatility);
+        markDataReceived();
       } catch (err) {
         console.error(`[SSE Multi] Error parsing ${asset} contracts:`, err);
       }
@@ -160,9 +194,10 @@ class MultiAssetSSEManager {
       clearTimeout(connection.reconnectTimer);
     }
 
-    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s (max)
+    // Exponential backoff: 500ms, 1s, 2s, 4s, 8s, 16s, 30s (max)
+    // Start faster for initial connection attempts
     const delay = Math.min(
-      1000 * Math.pow(2, connection.reconnectAttempts),
+      this.initialReconnectDelay * Math.pow(2, connection.reconnectAttempts),
       this.maxReconnectDelay
     );
 
@@ -182,12 +217,15 @@ class MultiAssetSSEManager {
 
     console.log(`[SSE Multi] Disconnecting ${asset}`);
 
-    // Clear timers
+    // Clear all timers
     if (connection.disconnectTimer) {
       clearTimeout(connection.disconnectTimer);
     }
     if (connection.reconnectTimer) {
       clearTimeout(connection.reconnectTimer);
+    }
+    if (connection.connectionTimeoutTimer) {
+      clearTimeout(connection.connectionTimeoutTimer);
     }
 
     // Close connection

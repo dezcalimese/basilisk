@@ -7,9 +7,12 @@ import { LimitOrderCalculator } from "@/components/dashboard/limit-order-calcula
 export function CalculatorDialog() {
   const [isOpen, setIsOpen] = useState(false);
 
-  // Keyboard shortcut
+  // Keyboard shortcut (ignore if modifier keys are pressed)
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
+      // Don't trigger on Cmd+C, Ctrl+C, etc.
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
       if (e.key === "c" || e.key === "C") {
         setIsOpen((prev) => !prev);
       }

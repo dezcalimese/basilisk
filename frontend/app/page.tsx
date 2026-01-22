@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { SignalList } from "@/components/dashboard/signal-list";
 import { AnimatedPrice } from "@/components/dashboard/animated-price";
@@ -8,6 +9,7 @@ import { HelpDialog } from "@/components/help-dialog";
 import { CalculatorDialog } from "@/components/calculator-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AssetSelector } from "@/components/asset-selector";
+import { WalletButton } from "@/components/auth/wallet-button";
 // import { VolatilitySurface3D } from "@/components/dashboard/volatility-surface-3d";
 import { PriceChart } from "@/components/dashboard/price-chart";
 import { ConnectionStatus } from "@/components/connection-status";
@@ -86,10 +88,15 @@ export default function Home() {
             <div className="flex items-center gap-4 sm:gap-6">
               <div className="flex items-center gap-3">
                 {/* Basilisk Logo Mark */}
-                <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-sky-500 flex items-center justify-center glow-cyan">
-                  <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="currentColor">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                  </svg>
+                <div className="relative w-10 h-10 rounded-xl overflow-hidden">
+                  <Image
+                    src="/basilisk-logo.png"
+                    alt="Basilisk"
+                    width={80}
+                    height={80}
+                    className="object-cover"
+                    priority
+                  />
                 </div>
                 <div>
                   <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
@@ -119,12 +126,13 @@ export default function Home() {
                   {nextExpiry && (
                     <div className="flex flex-col items-center border-l border-border pl-3">
                       <span className="text-xs text-muted-foreground">Next Expiry</span>
-                      <span className="text-sm font-mono text-cyan-500">{nextExpiry}</span>
+                      <span className="text-sm font-mono text-primary">{nextExpiry}</span>
                     </div>
                   )}
                 </div>
               )}
 
+              <WalletButton />
               <ThemeToggle />
             </div>
           </div>
@@ -167,7 +175,6 @@ export default function Home() {
                   title="Active Signals"
                   value={activeSignalsCount}
                   description="High EV opportunities"
-                  icon="lucide--zap"
                 />
               </div>
               <div className="fade-in stagger-2">
@@ -175,7 +182,6 @@ export default function Home() {
                   title="Average EV"
                   value={`${(avgEV * 100).toFixed(1)}%`}
                   description="Expected value"
-                  icon="lucide--trending-up"
                   valueColor={avgEV >= 0 ? "positive" : "negative"}
                 />
               </div>
@@ -184,7 +190,6 @@ export default function Home() {
                   title="Best Signal"
                   value={`${(highestEV * 100).toFixed(1)}%`}
                   description="Highest EV"
-                  icon="lucide--star"
                   valueColor="positive"
                 />
               </div>
@@ -195,7 +200,6 @@ export default function Home() {
                       title="Realized Vol"
                       value={`${(volatility.realized_vol * 100).toFixed(1)}%`}
                       description="30-day historical"
-                      icon="lucide--activity"
                     />
                   </div>
                   <div className="fade-in stagger-5">
@@ -203,7 +207,6 @@ export default function Home() {
                       title="Implied Vol"
                       value={`${(volatility.implied_vol * 100).toFixed(1)}%`}
                       description="Market expectation"
-                      icon="lucide--gauge"
                     />
                   </div>
                   <div className="fade-in stagger-6">
@@ -211,7 +214,6 @@ export default function Home() {
                       title="Vol Regime"
                       value={volatility.regime}
                       description={volatility.vol_signal}
-                      icon="lucide--layers"
                     />
                   </div>
                   <div className="fade-in stagger-7">
@@ -219,7 +221,6 @@ export default function Home() {
                       title="Vol Premium"
                       value={`${(volatility.vol_premium_pct * 100).toFixed(1)}%`}
                       description="IV over RV"
-                      icon="lucide--percent"
                       valueColor={volatility.vol_premium_pct > 0 ? "positive" : "negative"}
                     />
                   </div>
@@ -279,10 +280,14 @@ export default function Home() {
         <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-2">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-gradient-to-br from-cyan-500 to-sky-500 flex items-center justify-center">
-                <svg viewBox="0 0 24 24" className="w-3 h-3 text-white" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-                </svg>
+              <div className="relative w-5 h-5 rounded overflow-hidden">
+                <Image
+                  src="/basilisk-logo.png"
+                  alt="Basilisk"
+                  width={20}
+                  height={20}
+                  className="object-cover"
+                />
               </div>
               <span className="font-medium">Basilisk</span>
             </div>

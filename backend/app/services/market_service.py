@@ -5,7 +5,9 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.core.cache import cached
+from app.core.config import settings
 from app.data.bitcoin_client import BitcoinPriceClient
+from app.data.dflow_client import DFlowClient, get_dflow_client
 from app.data.ethereum_client import EthereumPriceClient
 from app.data.kalshi_client import KalshiClient
 from app.data.ripple_client import RipplePriceClient
@@ -26,6 +28,14 @@ class MarketService:
         self.predictor = ProbabilityPredictor()
         self.vol_regime = VolatilityRegime()
         self.order_flow = OrderFlowAnalyzer()
+
+        # DFlow client for Solana token mints (optional - degrades gracefully)
+        self.dflow_client: DFlowClient | None = None
+        if settings.dflow_api_key:
+            self.dflow_client = get_dflow_client()
+
+        # Cache for DFlow market mints
+        self._mint_cache: dict[str, dict[str, str]] = {}
 
     @cached(ttl=120, key_prefix="contracts:btc")
     async def get_bitcoin_hourly_contracts(self) -> list[dict[str, Any]]:
@@ -543,6 +553,12 @@ class MarketService:
         if obi_data:
             result["order_flow"] = obi_data
 
+        # Add DFlow token mints if available (for Solana trading)
+        dflow_mints = await self._get_dflow_mints(ticker)
+        if dflow_mints:
+            result["yes_mint"] = dflow_mints["yes_mint"]
+            result["no_mint"] = dflow_mints["no_mint"]
+
         return result
 
     def _get_mock_contracts(self, current_btc_price: float) -> dict[str, Any]:
@@ -550,6 +566,10 @@ class MarketService:
         from datetime import UTC, datetime, timedelta
 
         now = datetime.now(UTC)
+
+        # Demo mints (fake addresses for UI testing)
+        demo_yes_mint = "DeMoYeSMiNt1111111111111111111111111111111111"
+        demo_no_mint = "DeMoNoMiNt11111111111111111111111111111111111"
 
         contracts = [
             {
@@ -569,6 +589,8 @@ class MarketService:
                 "no_price": 0.55,
                 "implied_probability": 0.45,
                 "model_probability": 0.523,
+                "yes_mint": demo_yes_mint,
+                "no_mint": demo_no_mint,
             },
             {
                 "id": 2,
@@ -587,6 +609,8 @@ class MarketService:
                 "no_price": 0.28,
                 "implied_probability": 0.72,
                 "model_probability": 0.654,
+                "yes_mint": demo_yes_mint,
+                "no_mint": demo_no_mint,
             },
             {
                 "id": 3,
@@ -605,6 +629,8 @@ class MarketService:
                 "no_price": 0.72,
                 "implied_probability": 0.28,
                 "model_probability": 0.325,
+                "yes_mint": demo_yes_mint,
+                "no_mint": demo_no_mint,
             },
         ]
 
@@ -928,3 +954,31 @@ class MarketService:
             "forecast_confidence": "medium",
             "rv_ratio": 1.0,
         }
+
+    async def _get_dflow_mints(self, ticker: str) -> dict[str, str] | None:
+        """
+        Get DFlow token mints for a market ticker.
+
+        Returns dict with yes_mint and no_mint, or None if unavailable.
+        """
+        # Check cache first
+        if ticker in self._mint_cache:
+            return self._mint_cache[ticker]
+
+        # No DFlow client configured
+        if not self.dflow_client:
+            return None
+
+        try:
+            mints = await self.dflow_client.get_market_mints(ticker)
+            if mints:
+                self._mint_cache[ticker] = {
+                    "yes_mint": mints["yes_mint"],
+                    "no_mint": mints["no_mint"],
+                }
+                return self._mint_cache[ticker]
+        except Exception as e:
+            # DFlow not available for this market - graceful degradation
+            pass
+
+        return None

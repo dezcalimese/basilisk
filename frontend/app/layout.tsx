@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { PrivyProvider } from "@/providers/privy-provider";
 
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-heading",
@@ -47,16 +48,18 @@ export default function RootLayout({
       <body
         className={`${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable} antialiased`}
       >
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
-          disableTransitionOnChange={false}
-        >
-          <div className="h-dvh flex flex-col overflow-hidden bg-background bg-gradient-mesh noise-overlay">
-            {children}
-          </div>
-        </ThemeProvider>
+        <PrivyProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
+            enableSystem
+            disableTransitionOnChange={false}
+          >
+            <div className="h-dvh flex flex-col overflow-hidden bg-background bg-gradient-mesh noise-overlay">
+              {children}
+            </div>
+          </ThemeProvider>
+        </PrivyProvider>
       </body>
     </html>
   );

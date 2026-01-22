@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   BarChart,
   Bar,
@@ -11,6 +11,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { useMultiAssetStore } from "@/lib/stores/multi-asset-store";
+import { fetchWithRetry } from "@/lib/fetch-with-retry";
 
 interface HourlyStats {
   mean_return: number;
@@ -62,41 +63,66 @@ export function HourlyStatsWidget({
   const selectedAsset = useMultiAssetStore((state) => state.selectedAsset);
 
   useEffect(() => {
+    let mounted = true;
+    let interval: NodeJS.Timeout | null = null;
+
     const fetchStats = async () => {
       try {
-        setLoading(true);
-        // Fetch hourly statistics for selected asset
-        const statsResponse = await fetch(
-          `${apiUrl}/api/v1/statistics/hourly-movements?hours=720&asset=${selectedAsset.toLowerCase()}`
-        );
-        if (!statsResponse.ok) {
-          throw new Error(`HTTP ${statsResponse.status}`);
+        if (mounted && !stats) {
+          setLoading(true);
         }
-        const statsData = await statsResponse.json();
+
+        // Fetch hourly statistics with retry
+        const statsData = await fetchWithRetry<HourlyStats>(
+          `${apiUrl}/api/v1/statistics/hourly-movements?hours=720&asset=${selectedAsset.toLowerCase()}`,
+          {
+            maxRetries: 5,
+            initialDelay: 500,
+            onRetry: (attempt, error) => {
+              console.log(`[HourlyStats] Retry ${attempt} after error:`, error.message);
+            },
+          }
+        );
+
+        if (!mounted) return;
         setStats(statsData);
 
-        // Fetch extreme move probabilities for selected asset
-        const extremeResponse = await fetch(
-          `${apiUrl}/api/v1/statistics/extreme-moves?hours=720&asset=${selectedAsset.toLowerCase()}`
-        );
-        if (extremeResponse.ok) {
-          const extremeMovesData = await extremeResponse.json();
-          setExtremeData(extremeMovesData);
+        // Fetch extreme move probabilities (non-critical, don't fail on error)
+        try {
+          const extremeData = await fetchWithRetry<ExtremeMoveData>(
+            `${apiUrl}/api/v1/statistics/extreme-moves?hours=720&asset=${selectedAsset.toLowerCase()}`,
+            { maxRetries: 3, initialDelay: 500 }
+          );
+          if (mounted) {
+            setExtremeData(extremeData);
+          }
+        } catch {
+          // Extreme data is optional, don't show error
+          console.log('[HourlyStats] Extreme data not available');
         }
 
-        setError(null);
+        if (mounted) {
+          setError(null);
+        }
       } catch (err) {
         console.error("Failed to fetch hourly stats:", err);
-        setError(err instanceof Error ? err.message : "Failed to load");
+        if (mounted) {
+          setError(err instanceof Error ? err.message : "Failed to load");
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchStats();
-    const interval = setInterval(fetchStats, refreshInterval);
+    interval = setInterval(fetchStats, refreshInterval);
 
-    return () => clearInterval(interval);
+    return () => {
+      mounted = false;
+      if (interval) clearInterval(interval);
+    };
   }, [apiUrl, refreshInterval, selectedAsset]);
 
   if (loading) {
@@ -158,7 +184,7 @@ export function HourlyStatsWidget({
         <MetricBox
           label="Avg Return"
           value={`${(stats.mean_return * 100).toFixed(3)}%`}
-          color={stats.mean_return > 0 ? "text-cyan-400" : "text-red-400"}
+          color={stats.mean_return > 0 ? "text-[#4AADD8]" : "text-red-400"}
         />
         <MetricBox
           label="Volatility"
@@ -201,15 +227,17 @@ export function HourlyStatsWidget({
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: "rgba(15, 23, 42, 0.9)",
+                backgroundColor: "rgba(15, 23, 42, 0.95)",
                 border: "1px solid rgba(148, 163, 184, 0.2)",
                 borderRadius: "8px",
-                fontSize: 10,
+                fontSize: 11,
               }}
+              labelStyle={{ color: "#94a3b8" }}
+              itemStyle={{ color: "#e2e8f0" }}
               formatter={(value: number) => `${value.toFixed(3)}%`}
             />
             <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
-            <Bar dataKey="avgReturn" fill="#06b6d4" radius={[2, 2, 0, 0]} />
+            <Bar dataKey="avgReturn" fill="#1E81B0" radius={[2, 2, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -224,7 +252,7 @@ export function HourlyStatsWidget({
                 ? "bg-red-500/20 text-red-400"
                 : extremeData.regime === "ELEVATED"
                 ? "bg-amber-500/20 text-amber-400"
-                : "bg-cyan-500/20 text-cyan-400"
+                : "bg-primary/20 text-[#4AADD8]"
             }`}>
               {extremeData.regime} ({extremeData.volatility_multiplier.toFixed(1)}x)
             </span>
@@ -275,7 +303,7 @@ function PercentileBox({
           highlight
             ? "font-semibold"
             : value > 0
-            ? "text-cyan-400"
+            ? "text-[#4AADD8]"
             : value < 0
             ? "text-red-400"
             : ""

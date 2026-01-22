@@ -9,7 +9,7 @@ import type { TradeSignal } from '@/lib/api';
  * - Supports on-demand streaming (connect only to selected assets)
  */
 
-export type Asset = 'BTC' | 'ETH' | 'XRP';
+export type Asset = 'BTC' | 'ETH' | 'XRP' | 'SOL';
 
 export interface CandleData {
   timestamp: number;
@@ -155,16 +155,19 @@ const initialState = {
     BTC: createInitialAssetData(),
     ETH: createInitialAssetData(),
     XRP: createInitialAssetData(),
+    SOL: createInitialAssetData(),
   },
   assetAnalytics: {
     BTC: createInitialAnalytics(),
     ETH: createInitialAnalytics(),
     XRP: createInitialAnalytics(),
+    SOL: createInitialAnalytics(),
   },
   assetConnections: {
     BTC: createInitialConnection(),
     ETH: createInitialConnection(),
     XRP: createInitialConnection(),
+    SOL: createInitialConnection(),
   },
 };
 
@@ -241,6 +244,7 @@ export const useMultiAssetStore = create<MultiAssetState>((set, get) => ({
       [asset]: {
         ...state.assetData[asset],
         candles,
+        lastCandle: candles.length > 0 ? candles[candles.length - 1] : null,
       },
     },
   })),
@@ -285,37 +289,51 @@ export const useMultiAssetStore = create<MultiAssetState>((set, get) => ({
 }));
 
 // Backward compatibility hooks
+// Each value gets its own selector for granular reactivity
 export const useRealtimeStore = () => {
-  const selectedAsset = useMultiAssetStore((state) => state.selectedAsset);
-  const assetData = useMultiAssetStore((state) => state.assetData[selectedAsset]);
-  const connectionState = useMultiAssetStore((state) => state.assetConnections[selectedAsset]);
+  const currentPrice = useMultiAssetStore((state) => state.assetData[state.selectedAsset].currentPrice);
+  const priceTimestamp = useMultiAssetStore((state) => state.assetData[state.selectedAsset].priceTimestamp);
+  const candles = useMultiAssetStore((state) => state.assetData[state.selectedAsset].candles);
+  const lastCandle = useMultiAssetStore((state) => state.assetData[state.selectedAsset].lastCandle);
+  const orderBook = useMultiAssetStore((state) => state.assetData[state.selectedAsset].orderBook);
+  const cvd = useMultiAssetStore((state) => state.assetData[state.selectedAsset].cvd);
+  const connectionState = useMultiAssetStore((state) => state.assetConnections[state.selectedAsset].state);
+  const connectionError = useMultiAssetStore((state) => state.assetConnections[state.selectedAsset].error);
+  const lastConnectionTime = useMultiAssetStore((state) => state.assetConnections[state.selectedAsset].lastConnectionTime);
 
   return {
-    currentPrice: assetData.currentPrice,
-    priceTimestamp: assetData.priceTimestamp,
-    candles: assetData.candles,
-    lastCandle: assetData.lastCandle,
-    orderBook: assetData.orderBook,
-    cvd: assetData.cvd,
-    connectionState: connectionState.state,
-    connectionError: connectionState.error,
-    lastConnectionTime: connectionState.lastConnectionTime,
+    currentPrice,
+    priceTimestamp,
+    candles,
+    lastCandle,
+    orderBook,
+    cvd,
+    connectionState,
+    connectionError,
+    lastConnectionTime,
   };
 };
 
 export const useAnalyticalStore = () => {
-  const selectedAsset = useMultiAssetStore((state) => state.selectedAsset);
-  const analytics = useMultiAssetStore((state) => state.assetAnalytics[selectedAsset]);
+  const signals = useMultiAssetStore((state) => state.assetAnalytics[state.selectedAsset].signals);
+  const volatility = useMultiAssetStore((state) => state.assetAnalytics[state.selectedAsset].volatility);
+  const greeksProfile = useMultiAssetStore((state) => state.assetAnalytics[state.selectedAsset].greeksProfile);
+  const probabilityDistribution = useMultiAssetStore((state) => state.assetAnalytics[state.selectedAsset].probabilityDistribution);
+  const rsi = useMultiAssetStore((state) => state.assetAnalytics[state.selectedAsset].rsi);
+  const macd = useMultiAssetStore((state) => state.assetAnalytics[state.selectedAsset].macd);
+  const stochastic = useMultiAssetStore((state) => state.assetAnalytics[state.selectedAsset].stochastic);
+  const signalsError = useMultiAssetStore((state) => state.assetAnalytics[state.selectedAsset].signalsError);
+  const signalsLastUpdated = useMultiAssetStore((state) => state.assetAnalytics[state.selectedAsset].signalsLastUpdated);
 
   return {
-    signals: analytics.signals,
-    volatility: analytics.volatility,
-    greeksProfile: analytics.greeksProfile,
-    probabilityDistribution: analytics.probabilityDistribution,
-    rsi: analytics.rsi,
-    macd: analytics.macd,
-    stochastic: analytics.stochastic,
-    signalsError: analytics.signalsError,
-    signalsLastUpdated: analytics.signalsLastUpdated,
+    signals,
+    volatility,
+    greeksProfile,
+    probabilityDistribution,
+    rsi,
+    macd,
+    stochastic,
+    signalsError,
+    signalsLastUpdated,
   };
 };

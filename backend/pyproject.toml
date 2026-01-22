@@ -29,6 +29,7 @@ dependencies = [
     "aioapns>=3.0",
     "pybreaker>=1.4.1",
     "tenacity>=9.1.2",
+    "pyjwt[crypto]>=2.8.0",
 ]
 
 [project.optional-dependencies]

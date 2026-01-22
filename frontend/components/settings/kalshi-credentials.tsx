@@ -88,7 +88,7 @@ export function KalshiCredentials({ onSuccess }: KalshiCredentialsProps) {
           onClick={() => setEnvironment("production")}
           className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
             environment === "production"
-              ? "bg-cyan-500/20 text-cyan-500 border border-cyan-500/30"
+              ? "bg-primary/20 text-primary border border-primary/30"
               : "bg-muted/50 text-muted-foreground hover:bg-muted"
           }`}
         >
@@ -145,13 +145,13 @@ export function KalshiCredentials({ onSuccess }: KalshiCredentialsProps) {
         <div
           className={`p-4 rounded-xl border ${
             validationResult.valid
-              ? "bg-cyan-500/10 border-cyan-500/20"
+              ? "bg-primary/10 border-primary/20"
               : "bg-red-500/10 border-red-500/20"
           }`}
         >
           {validationResult.valid ? (
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-cyan-400">
+              <div className="flex items-center gap-2 text-[#4AADD8]">
                 <i className="icon-[lucide--check-circle] h-5 w-5" />
                 <span className="font-medium">Credentials validated successfully</span>
               </div>
