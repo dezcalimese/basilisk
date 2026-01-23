@@ -200,7 +200,7 @@ export function HourlyStatsWidget({
 
       {/* Percentiles - compact */}
       <div className="flex-none mb-2">
-        <div className="flex justify-between text-[10px] gap-1">
+        <div className="flex justify-between text-xs gap-1">
           <PercentileBox label="5th" value={stats.percentile_5} />
           <PercentileBox label="25th" value={stats.percentile_25} />
           <PercentileBox label="50th" value={stats.percentile_50} highlight={true} />
@@ -215,14 +215,14 @@ export function HourlyStatsWidget({
           <BarChart data={hourlyData} margin={{ top: 5, right: 5, bottom: 5, left: 0 }}>
             <XAxis
               dataKey="hour"
-              tick={{ fontSize: 8, fill: "#94a3b8" }}
+              tick={{ fontSize: 10, fill: "#94a3b8" }}
               stroke="#94a3b8"
               interval={3}
             />
             <YAxis
-              tick={{ fontSize: 8, fill: "#94a3b8" }}
+              tick={{ fontSize: 10, fill: "#94a3b8" }}
               stroke="#94a3b8"
-              width={30}
+              width={32}
               tickFormatter={(value) => `${value.toFixed(1)}%`}
             />
             <Tooltip
@@ -230,7 +230,7 @@ export function HourlyStatsWidget({
                 backgroundColor: "rgba(15, 23, 42, 0.95)",
                 border: "1px solid rgba(148, 163, 184, 0.2)",
                 borderRadius: "8px",
-                fontSize: 11,
+                fontSize: 12,
               }}
               labelStyle={{ color: "#94a3b8" }}
               itemStyle={{ color: "#e2e8f0" }}
@@ -245,9 +245,9 @@ export function HourlyStatsWidget({
       {/* Extreme Moves - compact inline */}
       {extremeData && (
         <div className="flex-none pt-2 border-t border-border/50">
-          <div className="flex items-center justify-between text-[10px]">
+          <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground">Extreme moves:</span>
-            <span className={`px-1.5 py-0.5 rounded text-[9px] ${
+            <span className={`px-1.5 py-0.5 rounded text-xs ${
               extremeData.regime === "CRISIS"
                 ? "bg-red-500/20 text-red-400"
                 : extremeData.regime === "ELEVATED"
@@ -274,7 +274,7 @@ function MetricBox({
 }) {
   return (
     <div className="text-center">
-      <p className="text-[10px] text-muted-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
       <p className={`text-sm font-bold ${color}`}>{value}</p>
     </div>
   );
@@ -295,11 +295,11 @@ function PercentileBox({
         highlight ? "border border-primary rounded px-1 py-0.5" : ""
       }`}
     >
-      <p className={`text-[10px] ${highlight ? "font-semibold" : "text-muted-foreground"}`}>
+      <p className={`text-xs ${highlight ? "font-semibold" : "text-muted-foreground"}`}>
         {label}
       </p>
       <p
-        className={`text-[10px] ${
+        className={`text-xs ${
           highlight
             ? "font-semibold"
             : value > 0

@@ -43,7 +43,7 @@ export function MetricCard({
         className
       )}
     >
-      <h3 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+      <h3 className="label-caps">
         {title}
       </h3>
 
@@ -58,13 +58,13 @@ export function MetricCard({
         </div>
 
         {description && (
-          <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">
+          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
             {description}
           </p>
         )}
 
         {trend && trendValue && (
-          <div className={cn("flex items-center gap-1 mt-1 text-[10px]", trendColors[trend])}>
+          <div className={cn("flex items-center gap-1 mt-1 text-xs", trendColors[trend])}>
             <span className="font-medium">{trendValue}</span>
           </div>
         )}

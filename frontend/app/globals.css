@@ -148,7 +148,21 @@
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading);
+    text-wrap: balance;
     @apply tracking-tight;
+  }
+
+  /* Line-height scale paired with text sizes */
+  .text-xs { line-height: 1.5; }
+  .text-sm { line-height: 1.5; }
+  .text-base { line-height: 1.6; }
+  .text-lg { line-height: 1.45; }
+  .text-xl { line-height: 1.4; }
+  .text-2xl, .text-3xl, .text-4xl, .text-5xl { line-height: 1.2; }
+
+  /* Prose line length constraint */
+  p {
+    max-width: 65ch;
   }
 
   /* Monospace for code, tickers, prices */
@@ -664,6 +678,28 @@
   /* Tabular numbers - prevents layout shift when numbers change */
   .font-tabular-nums {
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Consistent uppercase label styling */
+  .label-caps {
+    font-size: 0.75rem; /* 12px */
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-foreground);
+  }
+
+  /* Prose styling for long-form content */
+  .prose-readable {
+    line-height: 1.7;
+  }
+
+  .prose-readable p {
+    margin-bottom: 1em;
+  }
+
+  .prose-readable p:last-child {
+    margin-bottom: 0;
   }
 
   /* ===== WALLET BUTTON ===== */

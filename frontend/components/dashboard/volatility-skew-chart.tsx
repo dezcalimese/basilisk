@@ -174,19 +174,19 @@ export function VolatilitySkewChart({
           <LineChart data={chartData} margin={{ top: 5, right: 5, bottom: 20, left: 0 }}>
             <XAxis
               dataKey="moneynessDisplay"
-              tick={{ fontSize: 9, fill: "#94a3b8" }}
+              tick={{ fontSize: 10, fill: "#94a3b8" }}
               stroke="#94a3b8"
               label={{
                 value: "Moneyness",
                 position: "insideBottom",
                 offset: -10,
-                style: { fontSize: 9, fill: "#94a3b8" },
+                style: { fontSize: 10, fill: "#94a3b8" },
               }}
             />
             <YAxis
-              tick={{ fontSize: 9, fill: "#94a3b8" }}
+              tick={{ fontSize: 10, fill: "#94a3b8" }}
               stroke="#94a3b8"
-              width={35}
+              width={38}
               tickFormatter={(value) => `${value.toFixed(0)}%`}
             />
             <Tooltip
@@ -194,7 +194,7 @@ export function VolatilitySkewChart({
                 backgroundColor: "rgba(15, 23, 42, 0.95)",
                 border: "1px solid rgba(148, 163, 184, 0.2)",
                 borderRadius: "8px",
-                fontSize: 11,
+                fontSize: 12,
               }}
               labelStyle={{ color: "#94a3b8" }}
               itemStyle={{ color: "#e2e8f0" }}
@@ -205,7 +205,7 @@ export function VolatilitySkewChart({
               x="1.000"
               stroke="#94a3b8"
               strokeDasharray="3 3"
-              label={{ value: "ATM", fill: "#94a3b8", fontSize: 9 }}
+              label={{ value: "ATM", fill: "#94a3b8", fontSize: 10 }}
             />
             <Line
               type="monotone"
@@ -239,7 +239,7 @@ export function VolatilitySkewChart({
 function MetricBox({ label, value }: { label: string; value: string }) {
   return (
     <div className="text-center">
-      <p className="text-[10px] text-muted-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
       <p className="text-sm font-semibold">{value}</p>
     </div>
   );
@@ -254,7 +254,7 @@ function SkewMetric({ skew }: { skew: number }) {
       : "text-amber-400";
   return (
     <div className="text-center">
-      <p className="text-[10px] text-muted-foreground">Skew</p>
+      <p className="text-xs text-muted-foreground">Skew</p>
       <p className={`text-sm font-bold ${color}`}>
         {skew > 0 ? "+" : ""}
         {skew.toFixed(2)}

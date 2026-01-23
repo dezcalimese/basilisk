@@ -168,7 +168,7 @@ export function HelpDialog() {
             {/* Additional Info */}
             <section>
               <h3 className="text-xl font-semibold mb-4">How It Works</h3>
-              <div className="space-y-3 text-sm text-muted-foreground">
+              <div className="prose-readable text-sm text-muted-foreground">
                 <p>
                   Basilisk analyzes Bitcoin hourly contracts on Kalshi to find mispriced opportunities. Our statistical model calculates the true probability of each outcome and compares it to the market's implied probability.
                 </p>

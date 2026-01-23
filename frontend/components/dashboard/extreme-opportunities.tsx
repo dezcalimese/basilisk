@@ -200,13 +200,13 @@ export function ExtremeOpportunitiesWidget({
                     ? "default"
                     : "secondary"
               }
-              className="text-[10px] px-1.5 py-0"
+              className="text-xs px-1.5 py-0"
             >
               {regime}
             </Badge>
           )}
         </div>
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           High-risk, high-reward
         </p>
       </div>
@@ -215,7 +215,7 @@ export function ExtremeOpportunitiesWidget({
       <div className="flex-1 min-h-0 overflow-y-auto">
         {isExtremeVol && (
           <div className="mb-2 p-2 rounded-lg border border-amber-500/30 bg-amber-500/10">
-            <div className="flex items-center gap-1.5 text-amber-400 text-[10px]">
+            <div className="flex items-center gap-1.5 text-amber-400 text-xs">
               <AlertTriangle className="h-3 w-3" />
               <span className="font-medium">
                 High Vol: {extremeData?.volatility_multiplier.toFixed(1)}x
@@ -250,7 +250,7 @@ export function ExtremeOpportunitiesWidget({
                     {opp.payoff_multiplier.toFixed(1)}x
                   </span>
                 </div>
-                <div className="flex justify-between text-[10px] text-muted-foreground">
+                <div className="flex justify-between text-xs text-muted-foreground">
                   <span>
                     {opp.required_move_pct >= 0 ? "+" : ""}
                     {opp.required_move_pct.toFixed(1)}% move
@@ -265,7 +265,7 @@ export function ExtremeOpportunitiesWidget({
 
       {/* Footer tip */}
       <div className="flex-none pt-2 border-t border-border/50 mt-2">
-        <p className="text-[9px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Enter at 8-12¢ for zero fees
         </p>
       </div>
