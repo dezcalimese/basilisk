@@ -87,6 +87,14 @@ export function useRealtimeData(options: UseRealtimeDataOptions = {}) {
 
     console.log(`[useRealtimeData] Asset changed to ${selectedAsset}`);
     multiAssetSSEManager.switchAsset(selectedAsset);
+
+    // Trigger immediate candle fetch for new asset
+    // The exchange API will detect the asset change and do a full refetch
+    if (exchangeAPI.getIsPolling()) {
+      // Force a fresh fetch by restarting polling
+      exchangeAPI.stopPolling();
+      exchangeAPI.startPolling();
+    }
   }, [selectedAsset, autoConnect]);
 
   return {

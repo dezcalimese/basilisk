@@ -29,11 +29,12 @@ export function AssetSelector() {
           key={symbol}
           onClick={() => selectAsset(symbol)}
           className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all font-medium text-sm",
-            "hover:bg-muted-foreground/10",
+            "flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] rounded-md font-medium text-sm",
+            "transition-colors duration-200 ease-out",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
             selectedAsset === symbol
               ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground"
+              : "text-muted-foreground hover:bg-muted-foreground/10"
           )}
           title={`Switch to ${name}`}
         >

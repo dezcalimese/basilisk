@@ -15,10 +15,11 @@ function DisabledWalletButton() {
   return (
     <button
       disabled
-      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-muted/50 text-muted-foreground font-semibold text-sm cursor-not-allowed"
+      className="flex items-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl bg-muted/50 text-muted-foreground font-semibold text-sm cursor-not-allowed"
       title="Wallet connection not configured"
+      aria-label="Connect wallet (not configured)"
     >
-      <i className="icon-[lucide--wallet] w-4 h-4" />
+      <i className="icon-[lucide--wallet] w-4 h-4" aria-hidden="true" />
       Connect Wallet
     </button>
   );
@@ -150,7 +151,7 @@ function ActiveWalletButton() {
   // Loading state
   if (!ready) {
     return (
-      <div className="h-10 w-32 rounded-xl bg-muted/50 animate-pulse" />
+      <div className="min-h-[44px] w-32 rounded-xl bg-muted/50 animate-pulse" aria-label="Loading wallet" />
     );
   }
 
@@ -159,9 +160,16 @@ function ActiveWalletButton() {
     return (
       <button
         onClick={login}
-        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#176a91] to-[#1E81B0] text-white font-semibold text-sm shadow-lg shadow-[#1E81B0]/25 hover:shadow-[#1E81B0]/40 transition-all hover:scale-[1.02] active:scale-[0.98]"
+        className={cn(
+          "wallet-btn-connect flex items-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl",
+          "bg-gradient-to-r from-[#176a91] to-[#1E81B0] text-white font-semibold text-sm",
+          "shadow-lg shadow-[#1E81B0]/25",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+          "active:scale-[0.98]"
+        )}
+        aria-label="Connect wallet"
       >
-        <i className="icon-[lucide--wallet] w-4 h-4" />
+        <i className="icon-[lucide--wallet] w-4 h-4" aria-hidden="true" />
         Connect Wallet
       </button>
     );
@@ -173,13 +181,17 @@ function ActiveWalletButton() {
       <button
         onClick={() => setDropdownOpen(!dropdownOpen)}
         className={cn(
-          "flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all",
-          "bg-muted/50 border-border/50 hover:bg-muted hover:border-primary/30",
+          "wallet-btn-connected flex items-center gap-3 px-4 py-2.5 min-h-[44px] rounded-xl border",
+          "bg-muted/50 border-border/50",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
           dropdownOpen && "bg-muted border-primary/30"
         )}
+        aria-expanded={dropdownOpen}
+        aria-haspopup="menu"
+        aria-label={`Wallet ${wallet ? formatAddress(wallet.address) : 'Connected'}, ${balanceLoading ? 'loading balance' : formatBalance(balance)}`}
       >
         {/* Wallet icon */}
-        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#1E81B0] to-[#4AADD8] flex items-center justify-center">
+        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#1E81B0] to-[#4AADD8] flex items-center justify-center" aria-hidden="true">
           <i className="icon-[lucide--wallet] w-3.5 h-3.5 text-white" />
         </div>
 
@@ -200,19 +212,24 @@ function ActiveWalletButton() {
         {/* Dropdown indicator */}
         <i
           className={cn(
-            "icon-[lucide--chevron-down] w-4 h-4 text-muted-foreground transition-transform",
+            "icon-[lucide--chevron-down] w-4 h-4 text-muted-foreground transition-transform duration-200 ease-out",
             dropdownOpen && "rotate-180"
           )}
+          aria-hidden="true"
         />
       </button>
 
       {/* Dropdown menu */}
       {dropdownOpen && (
-        <div className="absolute right-0 mt-2 w-56 rounded-xl border border-border/50 bg-card/95 backdrop-blur-lg shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+        <div
+          className="absolute right-0 mt-2 w-56 rounded-xl border border-border/50 bg-card/95 backdrop-blur-lg shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+          role="menu"
+          aria-orientation="vertical"
+        >
           {/* Wallet address */}
           <div className="p-4 border-b border-border/50">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#1E81B0] to-[#4AADD8] flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#1E81B0] to-[#4AADD8] flex items-center justify-center" aria-hidden="true">
                 <i className="icon-[lucide--wallet] w-5 h-5 text-white" />
               </div>
               <div>
@@ -229,7 +246,7 @@ function ActiveWalletButton() {
           {/* Balance */}
           <div className="p-4 border-b border-border/50">
             <p className="text-xs text-muted-foreground mb-1">USDC Balance</p>
-            <p className="text-lg font-bold">
+            <p className="text-lg font-bold font-tabular-nums">
               {balanceLoading ? (
                 <span className="animate-pulse">...</span>
               ) : (
@@ -239,12 +256,13 @@ function ActiveWalletButton() {
           </div>
 
           {/* Actions */}
-          <div className="p-2">
+          <div className="p-2" role="group">
             <button
               onClick={() => wallet && fetchBalance(wallet.address)}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="wallet-dropdown-item w-full flex items-center gap-3 px-3 py-2.5 min-h-[44px] rounded-lg text-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+              role="menuitem"
             >
-              <i className="icon-[lucide--refresh-cw] w-4 h-4" />
+              <i className="icon-[lucide--refresh-cw] w-4 h-4" aria-hidden="true" />
               Refresh Balance
             </button>
             <button
@@ -254,16 +272,18 @@ function ActiveWalletButton() {
                   setDropdownOpen(false);
                 }
               }}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="wallet-dropdown-item w-full flex items-center gap-3 px-3 py-2.5 min-h-[44px] rounded-lg text-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+              role="menuitem"
             >
-              <i className="icon-[lucide--copy] w-4 h-4" />
+              <i className="icon-[lucide--copy] w-4 h-4" aria-hidden="true" />
               Copy Address
             </button>
             <button
               onClick={handleDisconnect}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+              className="wallet-dropdown-item destructive w-full flex items-center gap-3 px-3 py-2.5 min-h-[44px] rounded-lg text-sm text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-inset"
+              role="menuitem"
             >
-              <i className="icon-[lucide--log-out] w-4 h-4" />
+              <i className="icon-[lucide--log-out] w-4 h-4" aria-hidden="true" />
               Disconnect
             </button>
           </div>

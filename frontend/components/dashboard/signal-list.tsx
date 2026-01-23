@@ -229,14 +229,14 @@ function SignalRow({ signal, currentTime, isSelected, onSelect, onTrade }: Signa
           </div>
           <div className="text-right ml-3 flex-shrink-0">
             <div
-              className={`text-base font-bold ${
+              className={`text-base font-bold font-tabular-nums ${
                 evIsPositive ? "value-positive" : "value-negative"
               }`}
             >
               {evIsPositive ? "+" : ""}
               {(animatedEv * 100).toFixed(1)}%
             </div>
-            <div className="text-xs text-muted-foreground font-mono">
+            <div className="text-xs text-muted-foreground font-mono font-tabular-nums">
               {timeRemainingLabel}
             </div>
           </div>
@@ -288,7 +288,7 @@ function SignalRow({ signal, currentTime, isSelected, onSelect, onTrade }: Signa
                 )}
               </div>
               {signal.yes_price !== undefined && signal.no_price !== undefined && (
-                <div className="text-xs">
+                <div className="text-xs font-tabular-nums">
                   Market: YES {animatedYes.toFixed(2)} / NO {animatedNo.toFixed(2)}
                 </div>
               )}
@@ -301,21 +301,21 @@ function SignalRow({ signal, currentTime, isSelected, onSelect, onTrade }: Signa
           {/* Stats column */}
           <div className="text-right ml-3 flex-shrink-0">
             <div
-              className={`text-lg font-bold ${
+              className={`text-lg font-bold font-tabular-nums ${
                 evIsPositive ? "value-positive" : "value-negative"
               }`}
             >
               {evIsPositive ? "+" : ""}
               {(animatedEv * 100).toFixed(1)}% EV
             </div>
-            <div className="text-xs text-muted-foreground mt-1">
+            <div className="text-xs text-muted-foreground mt-1 font-tabular-nums">
               {(signal.edge_percentage * 100).toFixed(1)}% edge
             </div>
-            <div className="text-xs text-muted-foreground mt-0.5">
+            <div className="text-xs text-muted-foreground mt-0.5 font-tabular-nums">
               {(signal.confidence_score * 100).toFixed(0)}% confidence
             </div>
             {signal.model_probability !== undefined && (
-              <div className="text-xs text-primary mt-1 font-medium">
+              <div className="text-xs text-primary mt-1 font-medium font-tabular-nums">
                 Model: {(signal.model_probability * 100).toFixed(1)}%
               </div>
             )}
@@ -328,7 +328,8 @@ function SignalRow({ signal, currentTime, isSelected, onSelect, onTrade }: Signa
             e.stopPropagation();
             onTrade?.();
           }}
-          className="btn-basilisk mt-3 w-full py-2.5 px-4 text-sm"
+          className="btn-basilisk mt-3 w-full min-h-[44px] py-2.5 px-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          aria-label={`Trade ${signal.signal_type} for ${tickerInfo.date} at ${tickerInfo.time}`}
         >
           Trade This Signal
         </button>

@@ -240,15 +240,17 @@
     -webkit-backdrop-filter: blur(16px) saturate(180%);
     border: 1px solid rgba(30, 129, 176, 0.15);
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.2s ease-out, border-color 0.2s ease-out, box-shadow 0.2s ease-out;
   }
 
-  .glass-metric:hover {
-    transform: translateY(-2px);
-    border-color: rgba(30, 129, 176, 0.3);
-    box-shadow:
-      0 8px 24px rgba(0, 0, 0, 0.08),
-      0 0 0 1px rgba(30, 129, 176, 0.1);
+  @media (hover: hover) {
+    .glass-metric:hover {
+      transform: translateY(-2px);
+      border-color: rgba(30, 129, 176, 0.3);
+      box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.08),
+        0 0 0 1px rgba(30, 129, 176, 0.1);
+    }
   }
 
   .dark .glass-metric {
@@ -259,13 +261,15 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.02);
   }
 
-  .dark .glass-metric:hover {
-    background: rgba(16, 26, 22, 0.95);
-    border-color: rgba(30, 129, 176, 0.25);
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.4),
-      0 0 20px rgba(30, 129, 176, 0.05),
-      inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  @media (hover: hover) {
+    .dark .glass-metric:hover {
+      background: rgba(16, 26, 22, 0.95);
+      border-color: rgba(30, 129, 176, 0.25);
+      box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        0 0 20px rgba(30, 129, 176, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
   }
 
   .glass-table {
@@ -420,13 +424,15 @@
     backdrop-filter: blur(12px);
     border: 1px solid rgba(30, 129, 176, 0.1);
     border-radius: 12px;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.2s ease-out, border-color 0.2s ease-out, box-shadow 0.2s ease-out, background 0.2s ease-out;
   }
 
-  .signal-card:hover {
-    transform: translateY(-1px);
-    border-color: rgba(30, 129, 176, 0.25);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  @media (hover: hover) {
+    .signal-card:hover {
+      transform: translateY(-1px);
+      border-color: rgba(30, 129, 176, 0.25);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    }
   }
 
   .signal-card.selected {
@@ -441,12 +447,14 @@
     border: 1px solid rgba(30, 129, 176, 0.08);
   }
 
-  .dark .signal-card:hover {
-    background: rgba(16, 26, 22, 0.95);
-    border-color: rgba(30, 129, 176, 0.2);
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.3),
-      0 0 20px rgba(30, 129, 176, 0.05);
+  @media (hover: hover) {
+    .dark .signal-card:hover {
+      background: rgba(16, 26, 22, 0.95);
+      border-color: rgba(30, 129, 176, 0.2);
+      box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.3),
+        0 0 20px rgba(30, 129, 176, 0.05);
+    }
   }
 
   .dark .signal-card.selected {
@@ -465,17 +473,19 @@
     border: none;
     border-radius: 10px;
     padding: 12px 24px;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
     box-shadow:
       0 4px 14px rgba(30, 129, 176, 0.25),
       inset 0 1px 0 rgba(255, 255, 255, 0.2);
   }
 
-  .btn-basilisk:hover {
-    transform: translateY(-2px);
-    box-shadow:
-      0 8px 24px rgba(30, 129, 176, 0.35),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  @media (hover: hover) {
+    .btn-basilisk:hover {
+      transform: translateY(-2px);
+      box-shadow:
+        0 8px 24px rgba(30, 129, 176, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
   }
 
   .btn-basilisk:active {
@@ -489,12 +499,14 @@
     border: 1px solid rgba(30, 129, 176, 0.3);
     border-radius: 10px;
     padding: 12px 24px;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: background 0.2s ease-out, border-color 0.2s ease-out;
   }
 
-  .btn-basilisk-outline:hover {
-    background: rgba(30, 129, 176, 0.1);
-    border-color: rgba(30, 129, 176, 0.5);
+  @media (hover: hover) {
+    .btn-basilisk-outline:hover {
+      background: rgba(30, 129, 176, 0.1);
+      border-color: rgba(30, 129, 176, 0.5);
+    }
   }
 
   /* ===== TRADE MODAL ===== */
@@ -646,4 +658,75 @@
   .stagger-5 { animation-delay: 0.25s; }
   .stagger-6 { animation-delay: 0.3s; }
   .stagger-7 { animation-delay: 0.35s; }
+
+  /* ===== TYPOGRAPHY UTILITIES ===== */
+
+  /* Tabular numbers - prevents layout shift when numbers change */
+  .font-tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ===== WALLET BUTTON ===== */
+
+  .wallet-btn-connect {
+    transition: box-shadow 0.2s ease-out, transform 0.1s ease-out;
+  }
+
+  @media (hover: hover) {
+    .wallet-btn-connect:hover {
+      box-shadow:
+        0 8px 24px rgba(30, 129, 176, 0.4),
+        0 0 0 1px rgba(30, 129, 176, 0.2);
+    }
+  }
+
+  .wallet-btn-connected {
+    transition: background-color 0.2s ease-out, border-color 0.2s ease-out;
+  }
+
+  @media (hover: hover) {
+    .wallet-btn-connected:hover {
+      background-color: var(--muted);
+      border-color: rgba(30, 129, 176, 0.3);
+    }
+  }
+
+  .wallet-dropdown-item {
+    transition: background-color 0.2s ease-out, color 0.2s ease-out;
+  }
+
+  @media (hover: hover) {
+    .wallet-dropdown-item:hover {
+      background-color: var(--muted);
+      color: var(--foreground);
+    }
+
+    .wallet-dropdown-item.destructive:hover {
+      background-color: rgba(239, 68, 68, 0.1);
+    }
+  }
+}
+
+/* ===== REDUCED MOTION ===== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .shimmer::after {
+    animation: none;
+  }
+
+  .pulse-glow {
+    animation: none;
+  }
+
+  .float {
+    animation: none;
+  }
 }

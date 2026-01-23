@@ -141,7 +141,7 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="flex-1 min-h-0 overflow-y-auto">
-        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <div className="w-12 h-12 rounded-full border-2 border-primary border-t-transparent animate-spin" />
@@ -254,7 +254,7 @@ export default function Home() {
             </div>
 
             {/* Secondary Row: Hourly Stats + Volatility */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-0">
               {/* Hourly Stats - 5 cols */}
               <div className="lg:col-span-5 h-[320px] fade-in">
                 <HourlyStatsWidget />

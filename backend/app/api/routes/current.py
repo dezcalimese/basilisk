@@ -14,6 +14,7 @@ from app.api.routes.signals import SignalResponse
 from app.data.bitcoin_client import BitcoinPriceClient
 from app.data.ethereum_client import EthereumPriceClient
 from app.data.ripple_client import RipplePriceClient
+from app.data.solana_client import SolanaPriceClient
 from app.services.market_service import MarketService
 
 router = APIRouter()
@@ -36,6 +37,8 @@ def get_price_client(asset: str):
         return EthereumPriceClient()
     elif asset_upper == "XRP":
         return RipplePriceClient()
+    elif asset_upper == "SOL":
+        return SolanaPriceClient()
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}")
 
@@ -49,6 +52,8 @@ def get_default_price(asset: str) -> float:
         return 3500.0
     elif asset_upper == "XRP":
         return 0.62
+    elif asset_upper == "SOL":
+        return 200.0
     else:
         return 0.0
 
@@ -56,18 +61,18 @@ def get_default_price(asset: str) -> float:
 @router.get("/contracts/{asset}")
 async def get_asset_contracts(asset: str) -> dict:
     """
-    Get hourly contract signals for specified asset (BTC, ETH, or XRP).
+    Get hourly contract signals for specified asset (BTC, ETH, XRP, or SOL).
 
     Fetches real data from Kalshi API (demo or production based on config).
     Includes volatility regime analysis.
 
     Args:
-        asset: Asset symbol (btc, eth, or xrp) - case insensitive
+        asset: Asset symbol (btc, eth, xrp, or sol) - case insensitive
     """
     asset_upper = asset.upper()
 
-    if asset_upper not in ["BTC", "ETH", "XRP"]:
-        raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}. Supported: BTC, ETH, XRP")
+    if asset_upper not in ["BTC", "ETH", "XRP", "SOL"]:
+        raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}. Supported: BTC, ETH, XRP, SOL")
 
     try:
         print(f"🔍 Creating MarketService for {asset_upper}...")
@@ -82,6 +87,8 @@ async def get_asset_contracts(asset: str) -> dict:
             result = await market_service.get_ethereum_hourly_contracts()
         elif asset_upper == "XRP":
             result = await market_service.get_ripple_hourly_contracts()
+        elif asset_upper == "SOL":
+            result = await market_service.get_solana_hourly_contracts()
 
         print(f"✓ Fetched {len(result.get('contracts', []))} {asset_upper} contracts")
 
@@ -124,12 +131,12 @@ async def get_asset_price(asset: str) -> AssetPriceResponse:
     to update prices in real-time without hitting Kalshi rate limits.
 
     Args:
-        asset: Asset symbol (btc, eth, or xrp) - case insensitive
+        asset: Asset symbol (btc, eth, xrp, or sol) - case insensitive
     """
     asset_upper = asset.upper()
 
-    if asset_upper not in ["BTC", "ETH", "XRP"]:
-        raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}. Supported: BTC, ETH, XRP")
+    if asset_upper not in ["BTC", "ETH", "XRP", "SOL"]:
+        raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}. Supported: BTC, ETH, XRP, SOL")
 
     try:
         price_client = get_price_client(asset_upper)
@@ -165,7 +172,7 @@ async def asset_trading_stream(request: Request, asset: str) -> AsyncGenerator:
     - Contract data updates every 20 seconds
 
     Args:
-        asset: Asset symbol (BTC, ETH, or XRP)
+        asset: Asset symbol (BTC, ETH, XRP, or SOL)
     """
     asset_upper = asset.upper()
     price_client = get_price_client(asset_upper)
@@ -182,6 +189,8 @@ async def asset_trading_stream(request: Request, asset: str) -> AsyncGenerator:
         get_contracts = market_service.get_ethereum_hourly_contracts
     elif asset_upper == "XRP":
         get_contracts = market_service.get_ripple_hourly_contracts
+    elif asset_upper == "SOL":
+        get_contracts = market_service.get_solana_hourly_contracts
     else:
         raise ValueError(f"Unsupported asset: {asset}")
 
@@ -278,12 +287,12 @@ async def stream_asset_data(request: Request, asset: str):
     Auto-reconnects on disconnect with Last-Event-ID support.
 
     Args:
-        asset: Asset symbol (btc, eth, or xrp) - case insensitive
+        asset: Asset symbol (btc, eth, xrp, or sol) - case insensitive
     """
     asset_upper = asset.upper()
 
-    if asset_upper not in ["BTC", "ETH", "XRP"]:
-        raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}. Supported: BTC, ETH, XRP")
+    if asset_upper not in ["BTC", "ETH", "XRP", "SOL"]:
+        raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}. Supported: BTC, ETH, XRP, SOL")
 
     return EventSourceResponse(
         asset_trading_stream(request, asset_upper),

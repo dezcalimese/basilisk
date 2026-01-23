@@ -28,10 +28,11 @@ export function HelpDialog() {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 bg-primary text-primary-foreground rounded-full p-4 shadow-lg hover:bg-primary/90 transition-colors z-50"
+        className="fixed bottom-4 right-4 bg-primary text-primary-foreground rounded-full p-2.5 shadow-md hover:shadow-lg transition-all duration-200 ease-out z-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         title="Help (Press H or ?)"
+        aria-label="Open help dialog"
       >
-        <HelpCircle className="h-6 w-6" />
+        <HelpCircle className="h-5 w-5" aria-hidden="true" />
       </button>
     );
   }
@@ -46,15 +47,21 @@ export function HelpDialog() {
 
       {/* Dialog */}
       <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
-        <div className="glass-card rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div
+          className="glass-card rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="help-dialog-title"
+        >
           {/* Header */}
           <div className="flex items-center justify-between border-b p-6">
-            <h2 className="text-2xl font-bold">Help & Metrics Guide</h2>
+            <h2 className="text-2xl font-bold" id="help-dialog-title">Help & Metrics Guide</h2>
             <button
               onClick={() => setIsOpen(false)}
-              className="text-muted-foreground hover:text-foreground transition-colors"
+              className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-muted-foreground transition-colors duration-200 ease-out rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label="Close help dialog"
             >
-              <X className="h-6 w-6" />
+              <X className="h-6 w-6" aria-hidden="true" />
             </button>
           </div>
 

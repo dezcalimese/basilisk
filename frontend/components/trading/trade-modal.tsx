@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { usePrivy } from "@privy-io/react-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,7 +55,28 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
     }
   }, [isOpen, reset]);
 
-  if (!isOpen || !signal) return null;
+  // Track if component is mounted (for portal)
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  // Handle escape key to close modal
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [isOpen, onClose]);
+
+  if (!isOpen || !signal || !mounted) return null;
 
   const yesPrice = signal.yes_price ? Math.round(signal.yes_price * 100) : 50;
   const noPrice = signal.no_price ? Math.round(signal.no_price * 100) : 50;
@@ -158,17 +180,27 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
     !isProcessing &&
     state.step !== "completed";
 
-  return (
+  const modalContent = (
     <>
       {/* Backdrop */}
       <div
-        className="trade-modal-backdrop fixed inset-0 z-40 animate-in fade-in duration-200"
+        className="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
         onClick={onClose}
+        aria-hidden="true"
       />
 
-      {/* Modal */}
-      <div className="fixed inset-x-0 bottom-0 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 z-50 w-full md:max-w-md animate-in slide-in-from-bottom-4 md:slide-in-from-bottom-0 md:zoom-in-95 duration-300">
-        <div className="trade-modal">
+      {/* Modal Container */}
+      <div
+        className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+        onClick={onClose}
+      >
+        <div
+          className="trade-modal w-full max-w-md max-h-[85vh] overflow-y-auto animate-in zoom-in-95 duration-300"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="trade-modal-title"
+          onClick={(e) => e.stopPropagation()}
+        >
           {/* Header */}
           <div className="flex items-start justify-between p-5 border-b border-border/50">
             <div className="flex items-center gap-4">
@@ -176,7 +208,7 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
                 <span className="text-white font-bold text-lg">₿</span>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground" id="trade-modal-title">
                   Bitcoin price at {expiryDisplay}?
                 </p>
                 <p className="font-semibold text-lg">
@@ -193,33 +225,42 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-muted rounded-lg transition-colors"
+              className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-muted transition-colors duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label="Close trade modal"
             >
-              <i className="icon-[lucide--x] h-5 w-5 text-muted-foreground" />
+              <i className="icon-[lucide--x] h-6 w-6 text-muted-foreground hover:text-foreground" aria-hidden="true" />
             </button>
           </div>
 
           {/* Buy/Sell Tabs */}
-          <div className="flex border-b border-border/50">
+          <div className="flex border-b border-border/50" role="tablist">
             <button
               onClick={() => setTab("buy")}
               className={cn(
-                "flex-1 py-3.5 text-sm font-semibold transition-all",
+                "flex-1 py-3.5 min-h-[44px] text-sm font-semibold transition-colors duration-200 ease-out",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
                 tab === "buy"
                   ? "text-primary border-b-2 border-primary bg-primary/5"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  : "text-muted-foreground"
               )}
+              role="tab"
+              aria-selected={tab === "buy"}
+              aria-controls="trade-panel"
             >
               Buy
             </button>
             <button
               onClick={() => setTab("sell")}
               className={cn(
-                "flex-1 py-3.5 text-sm font-semibold transition-all",
+                "flex-1 py-3.5 min-h-[44px] text-sm font-semibold transition-colors duration-200 ease-out",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-inset",
                 tab === "sell"
                   ? "text-red-500 border-b-2 border-red-500 bg-red-500/5"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  : "text-muted-foreground"
               )}
+              role="tab"
+              aria-selected={tab === "sell"}
+              aria-controls="trade-panel"
             >
               Sell
             </button>
@@ -245,7 +286,7 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
             {!isAuthenticated && (
               <div className="p-4 bg-primary/10 rounded-xl border border-primary/20">
                 <div className="flex items-center gap-3">
-                  <i className="icon-[lucide--wallet] h-5 w-5 text-[#4AADD8]" />
+                  <i className="icon-[lucide--wallet] h-5 w-5 text-[#4AADD8]" aria-hidden="true" />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-[#4AADD8]">
                       Connect wallet to trade
@@ -262,38 +303,42 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
             {isAuthenticated && wallet && (
               <div className="flex items-center justify-between p-3 bg-muted/30 rounded-xl border border-border/50">
                 <div className="flex items-center gap-2">
-                  <i className="icon-[lucide--wallet] h-4 w-4 text-muted-foreground" />
+                  <i className="icon-[lucide--wallet] h-4 w-4 text-muted-foreground" aria-hidden="true" />
                   <span className="text-sm text-muted-foreground">
                     USDC Balance
                   </span>
                 </div>
-                <span className="font-semibold">${balance.toFixed(2)}</span>
+                <span className="font-semibold font-tabular-nums">${balance.toFixed(2)}</span>
               </div>
             )}
 
             {/* Yes/No Buttons */}
-            <div className="flex gap-3">
+            <div className="flex gap-3" role="group" aria-label="Select outcome">
               <button
                 onClick={() => setSelectedSide("yes")}
                 className={cn(
-                  "flex-1 py-3.5 rounded-xl font-semibold text-sm transition-all",
+                  "flex-1 py-3.5 min-h-[44px] rounded-xl font-semibold text-sm transition-colors duration-200 ease-out",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
                   selectedSide === "yes"
                     ? "bg-gradient-to-r from-[#176a91] to-[#1E81B0] text-white shadow-lg shadow-[#1E81B0]/25"
-                    : "bg-muted/80 text-muted-foreground hover:bg-muted"
+                    : "bg-muted/80 text-muted-foreground"
                 )}
+                aria-pressed={selectedSide === "yes"}
               >
-                Yes {yesPrice}¢
+                Yes <span className="font-tabular-nums">{yesPrice}¢</span>
               </button>
               <button
                 onClick={() => setSelectedSide("no")}
                 className={cn(
-                  "flex-1 py-3.5 rounded-xl font-semibold text-sm transition-all",
+                  "flex-1 py-3.5 min-h-[44px] rounded-xl font-semibold text-sm transition-colors duration-200 ease-out",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
                   selectedSide === "no"
                     ? "bg-gradient-to-r from-[#176a91] to-[#1E81B0] text-white shadow-lg shadow-[#1E81B0]/25"
-                    : "bg-muted/80 text-muted-foreground hover:bg-muted"
+                    : "bg-muted/80 text-muted-foreground"
                 )}
+                aria-pressed={selectedSide === "no"}
               >
-                No {noPrice}¢
+                No <span className="font-tabular-nums">{noPrice}¢</span>
               </button>
             </div>
 
@@ -344,10 +389,10 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
             {/* Expiration (limit orders) */}
             {orderMode === "limit" && (
               <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">
+                <label className="text-sm font-medium text-muted-foreground" id="expiration-label">
                   Expiration
                 </label>
-                <div className="flex gap-2">
+                <div className="flex gap-2" role="group" aria-labelledby="expiration-label">
                   {[
                     { value: "gtc", label: "GTC" },
                     { value: "12am", label: "12AM EST" },
@@ -359,11 +404,13 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
                         setExpiration(option.value as typeof expiration)
                       }
                       className={cn(
-                        "flex-1 py-2.5 rounded-lg text-sm font-medium transition-all",
+                        "flex-1 py-2.5 min-h-[44px] rounded-lg text-sm font-medium transition-colors duration-200 ease-out",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
                         expiration === option.value
                           ? "bg-primary/20 text-primary border border-primary/30"
-                          : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                          : "bg-muted/50 text-muted-foreground"
                       )}
+                      aria-pressed={expiration === option.value}
                     >
                       {option.label}
                     </button>
@@ -377,29 +424,29 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
               <div className="p-4 bg-primary/10 rounded-xl border border-primary/20 space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Price per contract</span>
-                  <span className="font-semibold">
+                  <span className="font-semibold font-tabular-nums">
                     {formatCentsPrice(Math.round(state.quote.price * 100))}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Contracts</span>
-                  <span className="font-semibold">{state.quote.outputAmount}</span>
+                  <span className="font-semibold font-tabular-nums">{state.quote.outputAmount}</span>
                 </div>
                 {state.quote.priceImpact > 0.1 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Price impact</span>
-                    <span className="font-semibold text-amber-500">
+                    <span className="font-semibold font-tabular-nums text-amber-500">
                       {state.quote.priceImpact.toFixed(2)}%
                     </span>
                   </div>
                 )}
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Fee</span>
-                  <span className="font-semibold">${state.quote.fee.toFixed(2)}</span>
+                  <span className="font-semibold font-tabular-nums">${state.quote.fee.toFixed(2)}</span>
                 </div>
                 <div className="pt-2 border-t border-primary/20 flex justify-between">
                   <span className="text-[#4AADD8] font-medium">Total cost</span>
-                  <span className="font-bold text-lg">
+                  <span className="font-bold text-lg font-tabular-nums">
                     ${(state.quote.inputAmount / 1_000_000).toFixed(2)}
                   </span>
                 </div>
@@ -411,14 +458,14 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
               <div className="p-4 bg-muted/30 rounded-xl border border-border/50 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Estimated cost</span>
-                  <span className="font-bold text-lg">
+                  <span className="font-bold text-lg font-tabular-nums">
                     ${estimatedCost.toFixed(2)}
                   </span>
                 </div>
                 {orderMode !== "dollars" && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Max payout</span>
-                    <span className="font-bold text-lg value-positive">
+                    <span className="font-bold text-lg value-positive font-tabular-nums">
                       ${contractCount.toFixed(2)}
                     </span>
                   </div>
@@ -430,13 +477,13 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
             <div className="p-4 bg-gradient-to-r from-primary/10 to-[#4AADD8]/10 rounded-xl border border-primary/20">
               <div className="flex justify-between text-sm">
                 <span className="text-[#4AADD8] font-medium">Expected Value</span>
-                <span className="font-bold text-[#4AADD8]">
+                <span className="font-bold text-[#4AADD8] font-tabular-nums">
                   +{(signal.expected_value * 100).toFixed(1)}%
                 </span>
               </div>
               <div className="flex justify-between text-sm mt-2">
                 <span className="text-muted-foreground">Model Probability</span>
-                <span className="font-semibold text-[#4AADD8]">
+                <span className="font-semibold text-[#4AADD8] font-tabular-nums">
                   {(
                     (signal.model_probability || signal.implied_probability || 0.5) *
                     100
@@ -448,9 +495,9 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
 
             {/* No mints warning */}
             {!hasMints && (
-              <div className="p-4 bg-amber-500/10 rounded-xl border border-amber-500/20">
+              <div className="p-4 bg-amber-500/10 rounded-xl border border-amber-500/20" role="alert">
                 <div className="flex items-center gap-3 text-amber-400 text-sm">
-                  <i className="icon-[lucide--alert-triangle] h-5 w-5 flex-shrink-0" />
+                  <i className="icon-[lucide--alert-triangle] h-5 w-5 flex-shrink-0" aria-hidden="true" />
                   <span>
                     This market is not yet available for on-chain trading
                   </span>
@@ -460,12 +507,12 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
 
             {/* Insufficient balance warning */}
             {insufficientBalance && isAuthenticated && (
-              <div className="p-4 bg-red-500/10 rounded-xl border border-red-500/20">
+              <div className="p-4 bg-red-500/10 rounded-xl border border-red-500/20" role="alert">
                 <div className="flex items-center gap-3 text-red-400 text-sm">
-                  <i className="icon-[lucide--alert-circle] h-5 w-5 flex-shrink-0" />
+                  <i className="icon-[lucide--alert-circle] h-5 w-5 flex-shrink-0" aria-hidden="true" />
                   <span>
-                    Insufficient balance. You need ${estimatedCost.toFixed(2)} but
-                    have ${balance.toFixed(2)}
+                    Insufficient balance. You need <span className="font-tabular-nums">${estimatedCost.toFixed(2)}</span> but
+                    have <span className="font-tabular-nums">${balance.toFixed(2)}</span>
                   </span>
                 </div>
               </div>
@@ -473,9 +520,9 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
 
             {/* Error Display */}
             {state.error && (
-              <div className="p-4 bg-red-500/10 rounded-xl border border-red-500/20">
+              <div className="p-4 bg-red-500/10 rounded-xl border border-red-500/20" role="alert">
                 <div className="flex items-center gap-3 text-red-400 text-sm">
-                  <i className="icon-[lucide--alert-circle] h-5 w-5 flex-shrink-0" />
+                  <i className="icon-[lucide--alert-circle] h-5 w-5 flex-shrink-0" aria-hidden="true" />
                   <span>{state.error}</span>
                 </div>
               </div>
@@ -483,13 +530,13 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
 
             {/* Success Display */}
             {state.step === "completed" && state.orderStatus && (
-              <div className="p-4 bg-primary/10 rounded-xl border border-primary/20">
+              <div className="p-4 bg-primary/10 rounded-xl border border-primary/20" role="status">
                 <div className="flex items-center gap-3 text-[#4AADD8] text-sm">
-                  <i className="icon-[lucide--check-circle] h-5 w-5 flex-shrink-0" />
+                  <i className="icon-[lucide--check-circle] h-5 w-5 flex-shrink-0" aria-hidden="true" />
                   <div>
                     <p className="font-medium">Trade Complete!</p>
                     <p className="text-muted-foreground">
-                      Filled {state.orderStatus.filledAmount} contracts
+                      Filled <span className="font-tabular-nums">{state.orderStatus.filledAmount}</span> contracts
                       {state.orderStatus.averagePrice &&
                         ` at ${formatCentsPrice(
                           Math.round(state.orderStatus.averagePrice * 100)
@@ -502,10 +549,10 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
                     href={`https://solscan.io/tx/${state.txSignature}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-2 text-xs text-[#4AADD8] hover:underline flex items-center gap-1"
+                    className="mt-2 min-h-[44px] text-xs text-[#4AADD8] flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
                   >
                     View on Solscan
-                    <i className="icon-[lucide--external-link] h-3 w-3" />
+                    <i className="icon-[lucide--external-link] h-3 w-3" aria-hidden="true" />
                   </a>
                 )}
               </div>
@@ -515,21 +562,22 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
             <button
               onClick={handleSubmit}
               disabled={!canSubmit && isAuthenticated}
-              className="btn-basilisk w-full h-14 text-base disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              className="btn-basilisk w-full min-h-[56px] text-base disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              aria-busy={isProcessing}
             >
               {isProcessing ? (
                 <span className="flex items-center justify-center gap-2">
-                  <i className="icon-[lucide--loader-2] h-5 w-5 animate-spin" />
+                  <i className="icon-[lucide--loader-2] h-5 w-5 animate-spin" aria-hidden="true" />
                   {getStepLabel(state.step)}
                 </span>
               ) : state.step === "completed" ? (
                 <span className="flex items-center justify-center gap-2">
-                  <i className="icon-[lucide--check] h-5 w-5" />
+                  <i className="icon-[lucide--check] h-5 w-5" aria-hidden="true" />
                   Trade Complete
                 </span>
               ) : !isAuthenticated ? (
                 <span className="flex items-center justify-center gap-2">
-                  <i className="icon-[lucide--wallet] h-5 w-5" />
+                  <i className="icon-[lucide--wallet] h-5 w-5" aria-hidden="true" />
                   Connect Wallet
                 </span>
               ) : state.step === "confirming" ? (
@@ -543,4 +591,6 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
       </div>
     </>
   );
+
+  return createPortal(modalContent, document.body);
 }

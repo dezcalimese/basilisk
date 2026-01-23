@@ -239,14 +239,16 @@ export function PriceChart({ signals = [], height = 400 }: PriceChartProps) {
       '1mo': 30 * 24 * 60 * 60 * 1000,
     }[timeRange];
 
-    const filteredCandles = candles.filter(
+    let filteredCandles = candles.filter(
       (candle) => candle.timestamp >= now - rangeMs
     );
 
-    console.log(`[PriceChart] Displaying ${filteredCandles.length} of ${candles.length} candles (${timeRange} range)`);
+    // If all candles are filtered out, use all candles to show something
     if (filteredCandles.length === 0 && candles.length > 0) {
-      console.warn(`[PriceChart] All candles filtered out! Time range: ${timeRange}, now: ${now}, cutoff: ${now - rangeMs}`);
-      console.warn(`[PriceChart] Candle timestamps: first=${candles[0].timestamp}, last=${candles[candles.length-1].timestamp}`);
+      console.warn(`[PriceChart] All candles filtered out for ${timeRange} range, showing all ${candles.length} candles`);
+      filteredCandles = candles;
+    } else {
+      console.log(`[PriceChart] Displaying ${filteredCandles.length} of ${candles.length} candles (${timeRange} range)`);
     }
 
     // Convert to lightweight-charts format

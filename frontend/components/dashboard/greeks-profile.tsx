@@ -30,40 +30,11 @@ export function GreeksProfile({ signal, compact = false }: GreeksProfileProps) {
     return (
       <div className="text-xs mt-2 border-t border-border/30 pt-2">
         <div className="text-muted-foreground mb-1.5">Greeks:</div>
-        <div className="grid grid-cols-2 gap-x-8 gap-y-1.5">
-          <GreekItem
-            label="Delta (Δ)"
-            value={delta}
-            format={(v) => v.toFixed(4)}
-            tooltip={getGreekInterpretation("delta")}
-            showTooltip={showTooltip === "delta"}
-            onShowTooltip={() => setShowTooltip(showTooltip === "delta" ? null : "delta")}
-          />
-          <GreekItem
-            label="Gamma (Γ)"
-            value={gamma}
-            format={(v) => v.toFixed(6)}
-            tooltip={getGreekInterpretation("gamma")}
-            showTooltip={showTooltip === "gamma"}
-            onShowTooltip={() => setShowTooltip(showTooltip === "gamma" ? null : "gamma")}
-          />
-          <GreekItem
-            label="Vega (ν)"
-            value={vega}
-            format={(v) => v.toFixed(4)}
-            tooltip={getGreekInterpretation("vega")}
-            showTooltip={showTooltip === "vega"}
-            onShowTooltip={() => setShowTooltip(showTooltip === "vega" ? null : "vega")}
-          />
-          <GreekItem
-            label="Theta (Θ)"
-            value={theta}
-            format={(v) => v.toFixed(4)}
-            tooltip={getGreekInterpretation("theta")}
-            showTooltip={showTooltip === "theta"}
-            onShowTooltip={() => setShowTooltip(showTooltip === "theta" ? null : "theta")}
-            colorize
-          />
+        <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+          <CompactGreekItem symbol="Δ" name="Delta" value={delta} format={(v) => v.toFixed(4)} />
+          <CompactGreekItem symbol="Γ" name="Gamma" value={gamma} format={(v) => v.toFixed(6)} />
+          <CompactGreekItem symbol="ν" name="Vega" value={vega} format={(v) => v.toFixed(4)} />
+          <CompactGreekItem symbol="Θ" name="Theta" value={theta} format={(v) => v.toFixed(4)} colorize />
         </div>
       </div>
     );
@@ -112,6 +83,39 @@ export function GreeksProfile({ signal, compact = false }: GreeksProfileProps) {
   );
 }
 
+interface CompactGreekItemProps {
+  symbol: string;
+  name: string;
+  value: number;
+  format: (value: number) => string;
+  colorize?: boolean;
+}
+
+function CompactGreekItem({ symbol, name, value, format, colorize = false }: CompactGreekItemProps) {
+  const valueColor = colorize
+    ? value > 0
+      ? "text-green-500"
+      : value < 0
+        ? "text-red-500"
+        : "text-muted-foreground"
+    : "text-foreground";
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span
+        className="text-muted-foreground cursor-help"
+        title={name}
+      >
+        {symbol}:
+      </span>
+      <span className={`font-mono font-tabular-nums ${valueColor}`}>
+        {value > 0 && !colorize ? "+" : ""}
+        {format(value)}
+      </span>
+    </div>
+  );
+}
+
 interface GreekItemProps {
   label: string;
   value: number;
@@ -140,13 +144,13 @@ function GreekItem({
     : "text-foreground";
 
   return (
-    <div className="relative group">
+    <div className="relative">
       <button
         onClick={onShowTooltip}
-        className="flex items-center justify-between w-full hover:bg-muted/30 rounded px-1 py-0.5 transition-colors text-left"
+        className="inline-flex items-center gap-0.5 hover:bg-muted/30 rounded px-1 py-0.5 transition-colors"
       >
-        <span className="text-muted-foreground text-xs whitespace-nowrap">{label}:</span>
-        <span className={`font-mono text-xs ${valueColor} ml-1`}>
+        <span className="text-muted-foreground text-xs">{label}:</span>
+        <span className={`font-mono text-xs ${valueColor} font-tabular-nums`}>
           {value > 0 && !colorize ? "+" : ""}
           {format(value)}
         </span>

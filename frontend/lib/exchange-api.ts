@@ -26,6 +26,7 @@ class ExchangeAPIClient {
   private consecutiveErrors = 0;
   private maxRetries = 5; // Increased retries
   private baseUrl: string;
+  private currentAsset: Asset | null = null;
 
   constructor(baseUrl: string = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000') {
     this.baseUrl = baseUrl;
@@ -61,6 +62,14 @@ class ExchangeAPIClient {
     const asset = store.selectedAsset;
     const symbolMap: Record<Asset, string> = { BTC: 'btcusd', ETH: 'ethusd', XRP: 'xrpusd', SOL: 'solusd' };
     const symbol = symbolMap[asset];
+
+    // Force full refetch when asset changes
+    if (this.currentAsset !== asset) {
+      console.log(`[Exchange API] Asset changed from ${this.currentAsset} to ${asset}, forcing full refetch`);
+      this.currentAsset = asset;
+      // Reset timestamp to force full data load for new asset
+      this.lastCandleTimestamp[asset] = 0;
+    }
 
     try {
       const url = `${this.baseUrl}/api/v1/candles/${symbol}?interval=${this.interval}&limit=500`;
