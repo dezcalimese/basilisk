@@ -2,16 +2,17 @@
 
 > *"A serpent's eye for mispriced markets."*
 
-Basilisk is a full-stack trading platform for Kalshi digital options contracts. It identifies mispriced binary options by comparing professional options market volatility (Deribit DVOL) against prediction market prices to calculate expected value (EV), then enables trade execution across web, mobile, Telegram, and CLI interfaces.
+Basilisk is a full-stack trading platform for prediction market binary options. It's a **hybrid platform** supporting both **Kalshi** (centralized) and **DFlow** (Solana-based) prediction markets. It identifies mispriced binary options by comparing professional options market volatility (Deribit DVOL) against prediction market prices to calculate expected value (EV), then enables trade execution across web, mobile, Telegram, and CLI interfaces.
 
 ## What It Does
 
-1. **Fetches** real-time contract data from Kalshi (BTC, ETH, XRP hourly contracts)
+1. **Fetches** real-time contract data from Kalshi and DFlow (BTC, ETH, XRP, SOL hourly contracts)
 2. **Calculates** true probability using Black-Scholes with Deribit DVOL
 3. **Identifies** mispriced contracts where market price diverges from model price
 4. **Signals** high-EV opportunities (>2% expected value)
-5. **Executes** trades via Kalshi API with Builder Code revenue sharing
-6. **Notifies** via Telegram bot and iOS push notifications
+5. **Authenticates** users via Privy with Solana/Ethereum wallet support
+6. **Executes** trades via Kalshi API or DFlow (client-side Solana signing)
+7. **Notifies** via Telegram bot and iOS push notifications
 
 ## Architecture
 
