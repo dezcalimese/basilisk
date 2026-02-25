@@ -11,7 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { AssetSelector } from "@/components/asset-selector";
 import { WalletButton } from "@/components/auth/wallet-button";
 // import { VolatilitySurface3D } from "@/components/dashboard/volatility-surface-3d";
-import { PriceChart } from "@/components/dashboard/price-chart";
+import { LivelineChart } from "@/components/dashboard/liveline-chart";
 import { ConnectionStatus } from "@/components/connection-status";
 import { HourlyStatsWidget } from "@/components/dashboard/hourly-stats-widget";
 import { VolatilitySkewChart } from "@/components/dashboard/volatility-skew-chart";
@@ -111,27 +111,10 @@ export default function Home() {
               <div className="hidden sm:block h-8 w-px bg-border" />
 
               <AssetSelector />
-              <ConnectionStatus showLabel={false} showError={false} />
             </div>
 
-            {/* Right: Price + Controls */}
+            {/* Right: Controls */}
             <div className="flex items-center gap-4 sm:gap-6">
-              {/* Live Price Display */}
-              {currentBtcPrice > 0 && (
-                <div className="hidden md:flex items-center gap-3 glass-metric px-4 py-2 rounded-xl">
-                  <div className="flex flex-col items-end">
-                    <span className="text-xs text-muted-foreground">{selectedAsset}/USD</span>
-                    <AnimatedPrice price={currentBtcPrice} decimals={2} className="text-lg font-bold text-primary" />
-                  </div>
-                  {nextExpiry && (
-                    <div className="flex flex-col items-center border-l border-border pl-3">
-                      <span className="text-xs text-muted-foreground">Next Expiry</span>
-                      <span className="text-sm font-mono text-primary">{nextExpiry}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
               <WalletButton />
               <ThemeToggle />
             </div>
@@ -140,8 +123,8 @@ export default function Home() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 min-h-0 overflow-y-auto">
-        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
+      <main className="flex-1 min-h-0 overflow-hidden">
+        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 pt-3 pb-2 h-full flex flex-col">
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <div className="w-12 h-12 rounded-full border-2 border-primary border-t-transparent animate-spin" />
@@ -169,7 +152,7 @@ export default function Home() {
         {!isLoading && (
           <>
             {/* Metrics Row */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-2 flex-none">
               <div className="fade-in stagger-1">
                 <MetricCard
                   title="Active Signals"
@@ -229,19 +212,19 @@ export default function Home() {
             </div>
 
             {/* Main Grid: Chart + OrderBook + Signals */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-4">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-2 flex-[3] min-h-0">
               {/* Price Chart - 6 cols */}
-              <div className="lg:col-span-6 h-[380px] fade-in">
-                <PriceChart signals={signals} height={320} />
+              <div className="lg:col-span-6 min-h-0 fade-in">
+                <LivelineChart signals={signals} />
               </div>
 
               {/* Order Book - 3 cols */}
-              <div className="lg:col-span-3 h-[380px] fade-in stagger-1">
+              <div className="lg:col-span-3 min-h-0 fade-in stagger-1">
                 <OrderBookDepth ticker={selectedTicker || undefined} />
               </div>
 
               {/* Active Signals - 3 cols */}
-              <div className="lg:col-span-3 h-[380px] fade-in stagger-2">
+              <div className="lg:col-span-3 min-h-0 fade-in stagger-2">
                 <SignalList
                   signals={signals}
                   currentTime={currentTime}
@@ -254,19 +237,19 @@ export default function Home() {
             </div>
 
             {/* Secondary Row: Hourly Stats + Volatility */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-0">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-[2] min-h-0">
               {/* Hourly Stats - 5 cols */}
-              <div className="lg:col-span-5 h-[320px] fade-in">
+              <div className="lg:col-span-5 min-h-0 fade-in">
                 <HourlyStatsWidget />
               </div>
 
               {/* Opportunities - 3 cols */}
-              <div className="lg:col-span-3 h-[320px] fade-in stagger-1">
+              <div className="lg:col-span-3 min-h-0 fade-in stagger-1">
                 <ExtremeOpportunitiesWidget />
               </div>
 
               {/* Volatility Skew - 4 cols */}
-              <div className="lg:col-span-4 h-[320px] fade-in stagger-2">
+              <div className="lg:col-span-4 min-h-0 fade-in stagger-2">
                 <VolatilitySkewChart />
               </div>
             </div>

@@ -5,12 +5,18 @@ import httpx
 import ccxt
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Any
-import time
 
 from app.core.cache import cached
+from app.services.candle_cache import (
+    store_last_known,
+    get_last_known_payload,
+    record_stale_event,
+)
 
 router = APIRouter()
 
+# Timeout (seconds) for each exchange request
+EXCHANGE_REQUEST_TIMEOUT = 8.0
 
 # Map friendly intervals to exchange-specific formats
 INTERVAL_MAP = {
@@ -109,18 +115,24 @@ async def fetch_from_ccxt(asset: str, interval: str, limit: int) -> List[Any]:
     for exchange_config in exchanges_to_try:
         try:
             # Run synchronous CCXT call in thread pool to avoid blocking
-            ohlcv = await asyncio.to_thread(
-                _sync_fetch_ohlcv,
-                exchange_config["id"],
-                exchange_config["symbol"],
-                ccxt_interval,
-                limit,
+            ohlcv = await asyncio.wait_for(
+                asyncio.to_thread(
+                    _sync_fetch_ohlcv,
+                    exchange_config["id"],
+                    exchange_config["symbol"],
+                    ccxt_interval,
+                    limit,
+                ),
+                timeout=EXCHANGE_REQUEST_TIMEOUT,
             )
 
             # CCXT format: [[timestamp, open, high, low, close, volume], ...]
             print(f"[Candles] Fetched {asset} from {exchange_config['id']}")
             return ohlcv
 
+        except asyncio.TimeoutError:
+            errors.append(f"{exchange_config['id']}: timed out after {EXCHANGE_REQUEST_TIMEOUT}s")
+            continue
         except Exception as e:
             errors.append(f"{exchange_config['id']}: {str(e)}")
             continue
@@ -164,11 +176,25 @@ async def _get_candles(asset: str, interval: str, limit: int) -> List[Any]:
                 detail=f"Invalid interval. Must be one of: {', '.join(INTERVAL_MAP.keys())}"
             )
 
-        return await _get_candles_cached(asset, interval, limit)
+        candles = await _get_candles_cached(asset, interval, limit)
+        await store_last_known(asset, interval, limit, candles)
+        return candles
 
-    except HTTPException:
+    except HTTPException as exc:
+        # Only attempt stale data for server-side errors
+        if exc.status_code >= 500:
+            payload = await get_last_known_payload(asset, interval, limit)
+            if payload and payload.get("candles"):
+                await record_stale_event(asset, interval, limit, f"HTTP {exc.status_code}: {exc.detail}")
+                print(f"[Candles API] Serving stale {asset} data after upstream error (HTTP {exc.status_code})")
+                return payload["candles"]
         raise
     except Exception as e:
+        payload = await get_last_known_payload(asset, interval, limit)
+        if payload and payload.get("candles"):
+            await record_stale_event(asset, interval, limit, str(e))
+            print(f"[Candles API] Serving stale {asset} data after unexpected error: {e}")
+            return payload["candles"]
         raise HTTPException(
             status_code=503,
             detail=f"Failed to fetch {asset} candles from any exchange: {str(e)}"
@@ -178,7 +204,7 @@ async def _get_candles(asset: str, interval: str, limit: int) -> List[Any]:
 @router.get("/candles/btcusd")
 async def get_btc_candles(
     interval: str = Query(default="1m", description="Candle interval (1m, 5m, 15m, 1h, 4h, 1d)"),
-    limit: int = Query(default=500, ge=1, le=1000, description="Number of candles to return"),
+    limit: int = Query(default=500, ge=1, le=1500, description="Number of candles to return"),
 ) -> List[Any]:
     """
     Fetch BTC/USD candlestick data with multi-exchange fallback.
@@ -196,7 +222,7 @@ async def get_btc_candles(
 @router.get("/candles/ethusd")
 async def get_eth_candles(
     interval: str = Query(default="1m", description="Candle interval (1m, 5m, 15m, 1h, 4h, 1d)"),
-    limit: int = Query(default=500, ge=1, le=1000, description="Number of candles to return"),
+    limit: int = Query(default=500, ge=1, le=1500, description="Number of candles to return"),
 ) -> List[Any]:
     """
     Fetch ETH/USD candlestick data with multi-exchange fallback.
@@ -210,7 +236,7 @@ async def get_eth_candles(
 @router.get("/candles/xrpusd")
 async def get_xrp_candles(
     interval: str = Query(default="1m", description="Candle interval (1m, 5m, 15m, 1h, 4h, 1d)"),
-    limit: int = Query(default=500, ge=1, le=1000, description="Number of candles to return"),
+    limit: int = Query(default=500, ge=1, le=1500, description="Number of candles to return"),
 ) -> List[Any]:
     """
     Fetch XRP/USD candlestick data with multi-exchange fallback.
@@ -224,7 +250,7 @@ async def get_xrp_candles(
 @router.get("/candles/solusd")
 async def get_sol_candles(
     interval: str = Query(default="1m", description="Candle interval (1m, 5m, 15m, 1h, 4h, 1d)"),
-    limit: int = Query(default=500, ge=1, le=1000, description="Number of candles to return"),
+    limit: int = Query(default=500, ge=1, le=1500, description="Number of candles to return"),
 ) -> List[Any]:
     """
     Fetch SOL/USD candlestick data with multi-exchange fallback.

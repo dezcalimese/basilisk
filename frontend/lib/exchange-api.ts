@@ -72,7 +72,7 @@ class ExchangeAPIClient {
     }
 
     try {
-      const url = `${this.baseUrl}/api/v1/candles/${symbol}?interval=${this.interval}&limit=500`;
+      const url = `${this.baseUrl}/api/v1/candles/${symbol}?interval=${this.interval}&limit=1440`;
 
       // Use fetchWithRetry for reliability
       const candles = await fetchWithRetry<any[]>(url, {

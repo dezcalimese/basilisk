@@ -122,6 +122,28 @@ export function SignalList({ signals, currentTime, selectedTicker, onSelectSigna
   // Filter out HOLD signals - only show actionable trades
   const actionableSignals = signals.filter(signal => signal.signal_type !== "HOLD");
 
+  // Find best strike (highest EV among nearest expiry) to highlight it
+  const bestStrikeId = useMemo(() => {
+    const active = actionableSignals.filter(
+      (s) => s.is_active && s.strike_price != null && s.expiry_time
+    );
+    if (active.length === 0) return null;
+
+    const nearest = active.reduce((n, s) => {
+      const t = new Date(s.expiry_time!).getTime();
+      const nt = n ? new Date(n.expiry_time!).getTime() : Infinity;
+      return t < nt ? s : n;
+    }, active[0]);
+
+    const nearestTime = nearest.expiry_time;
+    const nearestSignals = active.filter((s) => s.expiry_time === nearestTime);
+    const best = nearestSignals.reduce((h, s) =>
+      s.expected_value > h.expected_value ? s : h
+    , nearestSignals[0]);
+
+    return best.id;
+  }, [actionableSignals]);
+
   const handleOpenTradeModal = (signal: TradeSignal) => {
     setSelectedSignalForTrade(signal);
     setTradeModalOpen(true);
@@ -145,13 +167,14 @@ export function SignalList({ signals, currentTime, selectedTicker, onSelectSigna
   return (
     <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
       <h2 className="text-lg font-bold mb-3">Active Signals</h2>
-      <div className="space-y-3 overflow-y-auto flex-1 pr-2 pt-1">
+      <div className="space-y-3 overflow-y-auto flex-1 px-1 pt-1">
         {actionableSignals.map((signal) => (
           <SignalRow
             key={signal.id}
             signal={signal}
             currentTime={currentTime}
             isSelected={selectedTicker === signal.ticker}
+            isBestStrike={signal.id === bestStrikeId}
             onSelect={() => onSelectSignal?.(signal.ticker)}
             onTrade={() => handleOpenTradeModal(signal)}
           />
@@ -172,11 +195,12 @@ interface SignalRowProps {
   signal: TradeSignal;
   currentTime: number;
   isSelected?: boolean;
+  isBestStrike?: boolean;
   onSelect?: () => void;
   onTrade?: () => void;
 }
 
-function SignalRow({ signal, currentTime, isSelected, onSelect, onTrade }: SignalRowProps) {
+function SignalRow({ signal, currentTime, isSelected, isBestStrike, onSelect, onTrade }: SignalRowProps) {
   const tickerInfo = parseTickerInfo(signal.ticker, signal.expiry_time);
   const animatedEv = useAnimatedNumber(signal.expected_value ?? 0, 500);
   const animatedYes = useAnimatedNumber(signal.yes_price ?? 0, 500);
@@ -201,7 +225,7 @@ function SignalRow({ signal, currentTime, isSelected, onSelect, onTrade }: Signa
   return (
     <div
       onClick={onSelect}
-      className={`signal-card p-3 cursor-pointer ${isSelected ? "selected" : ""}`}
+      className={`signal-card p-3 cursor-pointer ${isSelected ? "selected" : ""} ${isBestStrike ? "ring-1 ring-green-500/60" : ""}`}
     >
       {/* Collapsed view for non-selected signals */}
       {!isSelected ? (
@@ -223,8 +247,9 @@ function SignalRow({ signal, currentTime, isSelected, onSelect, onTrade }: Signa
                 {signal.signal_type}
               </span>
             </div>
-            <div className="text-xs text-muted-foreground mt-0.5">
+            <div className={`text-xs mt-0.5 ${isBestStrike ? "text-green-500 font-medium" : "text-muted-foreground"}`}>
               Strike: {signal.strike_price ? `$${signal.strike_price.toLocaleString()}` : tickerInfo.strike}
+              {isBestStrike && " ★"}
             </div>
           </div>
           <div className="text-right ml-3 flex-shrink-0">
@@ -265,8 +290,9 @@ function SignalRow({ signal, currentTime, isSelected, onSelect, onTrade }: Signa
             </div>
 
             {/* Strike price */}
-            <div className="text-xs font-semibold text-muted-foreground mb-1">
+            <div className={`text-xs font-semibold mb-1 ${isBestStrike ? "text-green-500" : "text-muted-foreground"}`}>
               Strike: {signal.strike_price ? `$${signal.strike_price.toLocaleString()}` : tickerInfo.strike}
+              {isBestStrike && " ★ Best Strike"}
               {signal.current_btc_price && (
                 <span className="ml-1 text-xs font-normal">
                   (BTC: ${signal.current_btc_price.toLocaleString()})

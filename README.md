@@ -6,7 +6,7 @@ Basilisk is a full-stack trading platform for Kalshi digital options contracts. 
 
 ## What It Does
 
-1. **Fetches** real-time contract data from Kalshi (BTC, ETH, XRP hourly contracts)
+1. **Fetches** real-time contract data from Kalshi (BTC, ETH, XRP, SOL hourly contracts)
 2. **Calculates** true probability using Black-Scholes with Deribit DVOL
 3. **Identifies** mispriced contracts where market price diverges from model price
 4. **Signals** high-EV opportunities (>2% expected value)
@@ -49,9 +49,18 @@ basilisk/
 - [Rust](https://rustup.rs/) for CLI (optional)
 - Redis (optional, for caching)
 
-### Backend
+### Using Makefile
 
 ```bash
+make backend     # Start backend (FastAPI + uvicorn)
+make frontend    # Start frontend (Next.js + bun)
+make dev         # Start both in parallel
+```
+
+### Manual Setup
+
+```bash
+# Backend
 cd backend
 uv sync --all-extras
 cp .env.example .env
@@ -61,9 +70,8 @@ uv run uvicorn app.api.main:app --reload
 
 API available at `http://localhost:8000`
 
-### Frontend
-
 ```bash
+# Frontend
 cd frontend
 bun install
 cp .env.local.example .env.local
@@ -91,13 +99,16 @@ cargo build --release
 
 ### Analytics Dashboard
 - Real-time SSE streaming for prices and contracts
-- Multi-asset support (BTC, ETH, XRP)
+- Multi-asset support (BTC, ETH, XRP, SOL)
+- **Liveline chart** with candlestick/line modes, strike price overlays, and live price badge
 - **Trading modal** with Kalshi-style UI (Buy/Sell, Yes/No, Limit orders)
-- 3D volatility surface visualization
+- Multi-exchange candle data via CCXT (Kraken, Coinbase, Bitfinex, Bybit fallback)
 - Binary options Greeks (Delta, Gamma, Vega, Theta, Rho)
 - Volatility regime detection (CALM/NORMAL/ELEVATED/CRISIS)
+- Best strike highlighting across chart and signal list
 - Order book depth charts
-- Probability ladder
+- Light/dark theme support
+- Viewport-fit layout (no scrolling)
 - **Iconify icons** (277K+ icons via Tailwind CSS 4 plugin)
 
 ### Trade Execution
@@ -245,10 +256,10 @@ basilisk history --limit 20                      # Trade history
 | Layer | Technology |
 |-------|------------|
 | Backend | FastAPI, SQLAlchemy, Pydantic, httpx, Redis |
-| Frontend | Next.js 16, React 19, Zustand, Recharts, Plotly 3D |
+| Frontend | Next.js 16, React 19, Zustand, Liveline, Recharts |
 | iOS | SwiftUI, async/await, Keychain, LocalAuthentication |
 | CLI | Rust, Ratatui, Tokio, Reqwest, Clap |
-| Data | Kalshi API, Deribit API, Binance WebSocket, Coinbase, Kraken |
+| Data | Kalshi API, Deribit API, CCXT (Kraken, Coinbase, Bitfinex, Bybit) |
 
 ## Project Philosophy
 

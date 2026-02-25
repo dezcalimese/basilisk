@@ -172,11 +172,24 @@ export function HourlyStatsWidget({
   return (
     <div className="glass-card rounded-2xl p-4 h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex-none mb-2">
-        <h3 className="text-sm font-semibold">{selectedAsset} Hourly Stats</h3>
-        <p className="text-xs text-muted-foreground">
-          30d • {stats.total_samples} samples
-        </p>
+      <div className="flex-none mb-2 flex items-start justify-between">
+        <div>
+          <h3 className="text-sm font-semibold">{selectedAsset} Hourly Stats</h3>
+          <p className="text-xs text-muted-foreground">
+            30d • {stats.total_samples} samples
+          </p>
+        </div>
+        {extremeData && (
+          <span className={`px-1.5 py-0.5 rounded text-xs flex-shrink-0 ${
+            extremeData.regime === "CRISIS"
+              ? "bg-red-500/20 text-red-400"
+              : extremeData.regime === "ELEVATED"
+              ? "bg-amber-500/20 text-amber-400"
+              : "bg-primary/20 text-[#4AADD8]"
+          }`}>
+            {extremeData.regime} ({extremeData.volatility_multiplier.toFixed(1)}x)
+          </span>
+        )}
       </div>
 
       {/* Key Metrics Grid */}
@@ -242,23 +255,6 @@ export function HourlyStatsWidget({
         </ResponsiveContainer>
       </div>
 
-      {/* Extreme Moves - compact inline */}
-      {extremeData && (
-        <div className="flex-none pt-2 border-t border-border/50">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Extreme moves:</span>
-            <span className={`px-1.5 py-0.5 rounded text-xs ${
-              extremeData.regime === "CRISIS"
-                ? "bg-red-500/20 text-red-400"
-                : extremeData.regime === "ELEVATED"
-                ? "bg-amber-500/20 text-amber-400"
-                : "bg-primary/20 text-[#4AADD8]"
-            }`}>
-              {extremeData.regime} ({extremeData.volatility_multiplier.toFixed(1)}x)
-            </span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -14,6 +14,8 @@ from datetime import datetime
 import redis.asyncio as redis
 import logging
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 # Global Redis client and availability flag
@@ -72,7 +74,7 @@ async def get_redis_client() -> Optional[redis.Redis]:
     if _redis_client is None:
         try:
             _redis_client = redis.from_url(
-                "redis://localhost:6379",
+                settings.redis_url,
                 encoding="utf-8",
                 decode_responses=True,
                 max_connections=50
@@ -121,6 +123,48 @@ def _get_from_memory_cache(key: str) -> Optional[Any]:
 def _set_memory_cache(key: str, value: Any, ttl: int):
     """Store value in in-memory cache."""
     _memory_cache[key] = (value, time.time() + ttl)
+
+
+async def cache_set_json(key: str, value: Any, ttl: Optional[int] = None):
+    """
+    Store JSON-serializable value under a cache key.
+    Falls back to in-memory cache when Redis unavailable.
+    """
+    client = await get_redis_client()
+    payload = json.dumps(value, default=str)
+
+    if client is not None:
+        try:
+            if ttl is None:
+                await client.set(key, payload)
+            elif ttl > 0:
+                await client.setex(key, ttl, payload)
+            else:
+                await client.set(key, payload)
+        except Exception as e:
+            logger.warning(f"⚠️  [Cache] Error writing {key} to Redis: {e}")
+
+    # In-memory cache requires finite TTL; fall back to 10 minutes if none provided
+    memory_ttl = ttl if (ttl is not None and ttl > 0) else 600
+    if memory_ttl > 0:
+        _set_memory_cache(key, value, memory_ttl)
+
+
+async def cache_get_json(key: str) -> Optional[Any]:
+    """
+    Retrieve JSON-serializable value from cache.
+    Checks Redis first, then in-memory fallback.
+    """
+    client = await get_redis_client()
+    if client is not None:
+        try:
+            cached_data = await client.get(key)
+            if cached_data:
+                return json.loads(cached_data)
+        except Exception as e:
+            logger.warning(f"⚠️  [Cache] Error reading {key} from Redis: {e}")
+
+    return _get_from_memory_cache(key)
 
 
 def cached(ttl: int, key_prefix: str, adaptive: bool = True):
