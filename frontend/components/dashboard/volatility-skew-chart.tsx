@@ -198,7 +198,7 @@ export function VolatilitySkewChart({
               }}
               labelStyle={{ color: "#94a3b8" }}
               itemStyle={{ color: "#e2e8f0" }}
-              formatter={(value: number) => `${value.toFixed(1)}%`}
+              formatter={(value) => `${Number(value).toFixed(1)}%`}
               labelFormatter={(label) => `Moneyness: ${label}`}
             />
             <ReferenceLine
