@@ -26,10 +26,11 @@ class MultiAssetSSEManager {
   private activeAsset: Asset | null = null;
   private lastActiveAsset: Asset | null = null;
   private maxReconnectDelay = 30000; // 30s
-  private initialReconnectDelay = 500; // Fast initial retry
+  private maxReconnectAttempts = 5; // Stop after 5 attempts
+  private initialReconnectDelay = 1000; // 1s initial retry
   private connectionTimeout = 10000; // 10s to establish connection
   private idleDisconnectDelay = 60000; // 60s grace period
-  private baseUrl = 'http://localhost:8000';
+  private baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
   /**
    * Connect to an asset's SSE stream
@@ -189,13 +190,20 @@ class MultiAssetSSEManager {
       return;
     }
 
+    // Stop reconnecting after max attempts
+    if (connection.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.warn(`[SSE Multi] ${asset} max reconnect attempts reached - backend unavailable`);
+      useMultiAssetStore.getState().setConnectionState(asset, 'error', 'Backend unavailable');
+      this.disconnectAsset(asset);
+      return;
+    }
+
     // Clear any existing reconnect timer
     if (connection.reconnectTimer) {
       clearTimeout(connection.reconnectTimer);
     }
 
-    // Exponential backoff: 500ms, 1s, 2s, 4s, 8s, 16s, 30s (max)
-    // Start faster for initial connection attempts
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s (max)
     const delay = Math.min(
       this.initialReconnectDelay * Math.pow(2, connection.reconnectAttempts),
       this.maxReconnectDelay
