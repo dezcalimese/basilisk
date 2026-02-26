@@ -247,7 +247,7 @@ export function HourlyStatsWidget({
               }}
               labelStyle={{ color: "#94a3b8" }}
               itemStyle={{ color: "#e2e8f0" }}
-              formatter={(value: number) => `${value.toFixed(3)}%`}
+              formatter={(value) => `${Number(value).toFixed(3)}%`}
             />
             <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="3 3" />
             <Bar dataKey="avgReturn" fill="#1E81B0" radius={[2, 2, 0, 0]} />
