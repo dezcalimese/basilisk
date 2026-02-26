@@ -1,7 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  turbopack: {
+    root: "..",
+  },
+  serverExternalPackages: [
+    "@reown/appkit",
+    "@reown/appkit-controllers",
+    "@reown/appkit-utils",
+    "thread-stream",
+  ],
 };
 
 export default nextConfig;
