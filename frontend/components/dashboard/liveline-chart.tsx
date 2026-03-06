@@ -15,7 +15,12 @@ interface LivelineChartProps {
 export function LivelineChart({ signals = [] }: LivelineChartProps) {
   const [chartMode, setChartMode] = useState<"line" | "candle">("candle");
   const [lineMode, setLineMode] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const { resolvedTheme } = useTheme();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const selectedAsset = useMultiAssetStore((state) => state.selectedAsset);
   const connectionState = useRealtimeStore().connectionState;
@@ -202,7 +207,7 @@ export function LivelineChart({ signals = [] }: LivelineChartProps) {
 
       {/* Chart container - Liveline fills its parent */}
       <div className="flex-1 min-h-0">
-        <Liveline
+        {mounted && <Liveline
           // Data
           data={lineData}
           value={currentPrice}
@@ -255,7 +260,7 @@ export function LivelineChart({ signals = [] }: LivelineChartProps) {
           formatValue={formatValue}
           // Layout
           padding={{ top: 12, right: 88, bottom: 56, left: 12 }}
-        />
+        />}
       </div>
     </div>
   );

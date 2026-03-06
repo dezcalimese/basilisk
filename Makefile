@@ -7,4 +7,4 @@ frontend:
 	cd frontend && bun dev
 
 dev:
-	$(MAKE) backend & $(MAKE) frontend
+	overmind start -f Procfile

@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = [
         "http://localhost:3000",
         "http://localhost:3001",  # Next.js alternate port
+        "http://localhost:5100",  # Next.js Turbopack default
         "http://localhost:5173",  # Vite default
     ]
 
