@@ -2,16 +2,16 @@
 
 > *"A serpent's eye for mispriced markets."*
 
-Basilisk is a full-stack trading platform for Kalshi digital options contracts. It identifies mispriced binary options by comparing professional options market volatility (Deribit DVOL) against prediction market prices to calculate expected value (EV), then enables trade execution across web, mobile, Telegram, and CLI interfaces.
+Basilisk is a prediction market analytics and trading platform for Kalshi binary options. It identifies mispriced contracts by comparing professional options market volatility (Deribit DVOL) against prediction market prices, and enables on-chain trading via DFlow on Solana.
 
 ## What It Does
 
-1. **Fetches** real-time contract data from Kalshi (BTC, ETH, XRP, SOL hourly contracts)
-2. **Calculates** true probability using Black-Scholes with Deribit DVOL
+1. **Fetches** real-time contract data from Kalshi (BTC, ETH, SOL, XRP, DOGE — hourly and 15-min)
+2. **Calculates** true probability using Black-Scholes with Deribit DVOL / ATM options chain IV
 3. **Identifies** mispriced contracts where market price diverges from model price
 4. **Signals** high-EV opportunities (>2% expected value)
-5. **Executes** trades via Kalshi API with Builder Code revenue sharing
-6. **Notifies** via Telegram bot and iOS push notifications
+5. **Trades** on-chain via DFlow on Solana (Privy wallet integration)
+6. **Streams** real-time data via Kalshi WebSocket + SSE
 
 ## Architecture
 
@@ -20,16 +20,17 @@ basilisk/
 ├── backend/          # FastAPI (Python 3.12)
 │   ├── app/
 │   │   ├── api/routes/    # REST endpoints + SSE streams
-│   │   ├── services/      # Trade executor, Telegram bot, push notifications
-│   │   ├── models/        # EV calculator, Black-Scholes, volatility
-│   │   ├── data/          # Kalshi, Coinbase, Binance, Kraken clients
+│   │   ├── services/      # Market service, trade executor
+│   │   ├── models/        # Volatility (Yang-Zhang, HAR-RV, Black-Scholes)
+│   │   ├── data/          # Kalshi (REST + WS), DFlow, exchange clients
 │   │   └── db/            # SQLAlchemy models
 │   └── pyproject.toml
 │
-├── frontend/         # Next.js 16 + React 19
-│   ├── app/               # Dashboard pages
-│   ├── components/        # Widgets, charts, 3D surfaces
-│   └── lib/               # SSE managers, Zustand stores
+├── frontend/         # Next.js 16 + React 19 (port 3333)
+│   ├── app/               # Dashboard
+│   ├── components/        # Charts, signals, orderbook, trading modal
+│   ├── hooks/             # Trade execution, realtime data
+│   └── lib/               # DFlow client, SSE manager, Zustand stores
 │
 ├── ios/              # SwiftUI (iOS 17+)
 │   └── Basilisk/
@@ -46,15 +47,13 @@ basilisk/
 
 - Python 3.12+ with [uv](https://docs.astral.sh/uv/)
 - [Bun](https://bun.sh/) for frontend
-- [Rust](https://rustup.rs/) for CLI (optional)
 - Redis (optional, for caching)
+- Kalshi API credentials (RSA key pair)
 
-### Using Makefile
+### Using Overmind
 
 ```bash
-make backend     # Start backend (FastAPI + uvicorn)
-make frontend    # Start frontend (Next.js + bun)
-make dev         # Start both in parallel
+make dev     # Start backend + frontend in parallel
 ```
 
 ### Manual Setup
@@ -64,7 +63,7 @@ make dev         # Start both in parallel
 cd backend
 uv sync --all-extras
 cp .env.example .env
-# Edit .env with your credentials (see Configuration below)
+# Edit .env with your Kalshi credentials
 uv run uvicorn app.api.main:app --reload
 ```
 
@@ -74,92 +73,81 @@ API available at `http://localhost:8000`
 # Frontend
 cd frontend
 bun install
-cp .env.local.example .env.local
 bun dev
 ```
 
-Dashboard available at `http://localhost:3000`
+Dashboard available at `http://localhost:3333`
 
-### CLI
+## Supported Assets
 
-```bash
-cd cli
-cargo build --release
+| Asset | Hourly (1H) | 15-min | Deribit IV Source |
+|-------|:-----------:|:------:|-------------------|
+| BTC | ✅ 318 mkts | ✅ | DVOL index |
+| ETH | ✅ 165 mkts | ✅ | DVOL index |
+| SOL | ✅ 200 mkts | ✅ | ATM options chain |
+| XRP | ✅ 165 mkts | ✅ | ATM options chain |
+| DOGE | ✅ 137 mkts | ✅ | Kalshi IV only |
+| HYPE | — | ✅ | No coverage |
+| BNB | — | ✅ | No coverage |
 
-# Launch TUI dashboard
-./target/release/basilisk-cli
-
-# Or use trading commands directly
-./target/release/basilisk-cli trade 42 --size 5
-./target/release/basilisk-cli positions
-./target/release/basilisk-cli pnl today
-```
+Market counts reflect DFlow CLP liquidity (contracts with active bids).
 
 ## Features
 
 ### Analytics Dashboard
-- Real-time SSE streaming for prices and contracts
-- Multi-asset support (BTC, ETH, XRP, SOL)
-- **Liveline chart** with candlestick/line modes, strike price overlays, and live price badge
-- **Trading modal** with Kalshi-style UI (Buy/Sell, Yes/No, Limit orders)
-- Multi-exchange candle data via CCXT (Kraken, Coinbase, Bitfinex, Bybit fallback)
-- Binary options Greeks (Delta, Gamma, Vega, Theta, Rho)
+- Real-time price charts (Liveline) with 1H/15m default windows synced to timeframe
+- Multi-asset support with timeframe-aware asset selector
+- Inline metrics strip with hover tooltips (Signals, EV, RV, IV, Regime, Premium)
+- Order book depth from DFlow (CLP liquidity)
 - Volatility regime detection (CALM/NORMAL/ELEVATED/CRISIS)
-- Best strike highlighting across chart and signal list
-- Order book depth charts
-- Light/dark theme support
-- Viewport-fit layout (no scrolling)
-- **Iconify icons** (277K+ icons via Tailwind CSS 4 plugin)
+- Binary options Greeks (Delta, Gamma, Vega, Theta)
+- Hourly movement statistics and extreme opportunities
+- Volatility skew analysis
+- Animated connection indicator with status tooltip
+- Light/dark theme
 
-### Trade Execution
-- Market and limit orders via Kalshi API
-- Builder Code integration for revenue sharing
-- Position tracking with live P&L
-- Trade history and performance analytics
+### Trading (via DFlow on Solana)
+- On-chain execution via DFlow's `GET /order` endpoint
+- Privy wallet integration (embedded Solana wallets + Phantom/Solflare)
+- Proof KYC verification before buying outcome tokens
+- Geoblocking for restricted jurisdictions
+- Kalshi maintenance window detection (Thu 3-5am ET)
+- Real-time order status polling
 
-### Notifications
-- Telegram bot with inline trading
-- iOS push notifications (APNs)
-- Configurable EV thresholds and quiet hours
-- Alerts for signals, fills, expiry warnings, settlements
-
-### Multi-Platform Access
-| Platform | Interface |
-|----------|-----------|
-| Web | Next.js dashboard with real-time charts |
-| iOS | SwiftUI app with biometric/PIN/password auth |
-| Telegram | Bot commands: `/signals`, `/trade`, `/positions`, `/pnl` |
-| CLI | Rust TUI + trading subcommands |
+### Data Pipeline
+- Kalshi WebSocket (ticker + orderbook_delta channels) for real-time market data
+- In-process pub/sub data bus (WSDataBus) for distributing WS updates to SSE streams
+- Multi-exchange candle fallback via CCXT (Kraken, Coinbase, Bitfinex, Bybit)
+- DFlow Metadata API for orderbook depth (CLP liquidity)
+- 30s candle cache to minimize exchange rate limits
 
 ## API Endpoints
 
 ### Signals & Data
 ```
-GET  /api/v1/health              # Health check
-GET  /api/v1/contracts/{asset}   # Hourly contracts (BTC/ETH/XRP)
-GET  /api/v1/stream/{asset}      # SSE stream (prices + contracts)
-GET  /api/v1/signals/current     # Active trade signals
-GET  /api/v1/orderbook/{ticker}  # Order book depth
+GET  /api/v1/health                    # Health check
+GET  /api/v1/contracts/{asset}         # Hourly contracts
+GET  /api/v1/stream/{asset}?timeframe= # SSE stream (prices + contracts + orderbook)
+GET  /api/v1/orderbook/{ticker}        # Order book (DFlow → Kalshi WS → Kalshi REST)
+GET  /api/v1/candles/{symbol}          # OHLCV candles
+GET  /api/v1/statistics/hourly-movements # Hourly price statistics
+GET  /api/v1/volatility/skew           # IV skew analysis
 ```
 
-### Trading
+### Trading (DFlow)
 ```
-POST   /api/v1/trade             # Execute trade
-POST   /api/v1/trade/signal      # Trade from signal ID
-GET    /api/v1/trade/positions   # Open positions with live P&L
-DELETE /api/v1/trade/positions/{id}  # Close position
-GET    /api/v1/trade/history     # Trade history
-GET    /api/v1/trade/pnl/{period}    # P&L summary (today/week/all)
-GET    /api/v1/trade/balance     # Kalshi account balance
+POST /api/v1/trade/order               # Get order with Solana transaction
+GET  /api/v1/trade/order-status        # Poll order status by tx signature
+GET  /api/v1/trade/verify/{address}    # Check Proof KYC status
+GET  /api/v1/trade/markets/{ticker}/mints  # YES/NO token mints
 ```
 
-### Mobile & Notifications
+### Legacy Trading (Kalshi Direct)
 ```
-POST  /api/v1/mobile/register-push   # Register APNs token
-GET   /api/v1/mobile/preferences     # Get alert settings
-PATCH /api/v1/mobile/preferences     # Update alert settings
-GET   /api/v1/mobile/signals         # Lightweight signal payload
-POST  /api/v1/webhooks/telegram      # Telegram bot webhook
+POST   /api/v1/trade                   # Execute trade
+GET    /api/v1/trade/positions         # Open positions
+GET    /api/v1/trade/history           # Trade history
+GET    /api/v1/trade/balance           # Account balance
 ```
 
 ## Configuration
@@ -167,83 +155,37 @@ POST  /api/v1/webhooks/telegram      # Telegram bot webhook
 ### Backend `.env`
 
 ```bash
-# ===================
-# KALSHI (Required for trading)
-# ===================
+# Kalshi API (Required)
 KALSHI_KEY_ID=your_api_key_id
 KALSHI_PRIVATE_KEY_PATH=/path/to/private_key.pem
-KALSHI_USE_DEMO=true                    # Set false for live trading
-KALSHI_BUILDER_CODE=your_builder_code   # Revenue sharing (apply at kalshi.com/builders)
+KALSHI_USE_DEMO=true
 
-# ===================
-# TELEGRAM BOT (Optional)
-# ===================
-TELEGRAM_BOT_TOKEN=123456789:ABCdefGHI...
-TELEGRAM_WEBHOOK_SECRET=random_secret_string
+# DFlow (Optional — dev endpoints work without key)
+DFLOW_API_KEY=
+DFLOW_TRADE_API_URL=https://dev-quote-api.dflow.net
+DFLOW_METADATA_API_URL=https://dev-prediction-markets-api.dflow.net
 
-# ===================
-# APPLE PUSH NOTIFICATIONS (Optional)
-# ===================
-APNS_KEY_ID=ABC123DEFG
-APNS_TEAM_ID=TEAM123456
-APNS_KEY_PATH=/path/to/AuthKey.p8
-APNS_BUNDLE_ID=com.yourname.basilisk
+# Privy Auth
+PRIVY_APP_ID=your_privy_app_id
 
-# ===================
-# MODEL PARAMETERS
-# ===================
-MODEL_EV_THRESHOLD=0.02          # 2% minimum EV for signals
-MODEL_CONFIDENCE_THRESHOLD=0.60  # 60% minimum confidence
-KALSHI_FEE_RATE=0.07             # 7% fee on profits
-
-# ===================
-# INFRASTRUCTURE
-# ===================
+# Infrastructure
 DATABASE_URL=sqlite:///./basilisk.db
 REDIS_URL=redis://localhost:6379
-ENCRYPTION_KEY=                  # For encrypting stored API keys (openssl rand -hex 32)
 ```
 
 ### Frontend `.env.local`
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:8000
-```
-
-## CLI Commands
-
-```bash
-# TUI Dashboard (default)
-basilisk                    # Launch interactive dashboard
-basilisk dashboard          # Same as above
-
-# Trading
-basilisk trade <signal_id> --size <contracts>   # Execute from signal
-basilisk positions                               # List open positions
-basilisk close <position_id>                     # Close a position
-basilisk pnl [today|week|all]                   # P&L summary
-basilisk history --limit 20                      # Trade history
-```
-
-## Telegram Bot Commands
-
-```
-/start      - Welcome message and setup
-/signals    - Current high-EV opportunities (top 5)
-/signal <id> - Detailed signal view
-/trade <id> <size> - Execute trade with confirmation
-/positions  - Open positions with live P&L
-/pnl        - Today's P&L summary
-/settings   - View alert thresholds
-/alerts on|off - Toggle notifications
-/help       - Command reference
+NEXT_PUBLIC_PRIVY_APP_ID=your_privy_app_id
+NEXT_PUBLIC_SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
 ```
 
 ## How EV is Calculated
 
-1. **Fetch Deribit DVOL** - 30-day implied volatility from professional options market
-2. **Black-Scholes Probability** - Calculate P(BTC > strike at expiry) using DVOL
-3. **Compare to Market** - Kalshi implied probability = market price
+1. **Fetch Deribit IV** — DVOL index for BTC/ETH, ATM options chain IV for SOL/XRP
+2. **Black-Scholes Probability** — Calculate P(asset > strike at expiry) using IV
+3. **Compare to Market** — Kalshi implied probability = market price
 4. **Calculate EV**:
    ```
    mispricing = model_probability - market_probability
@@ -255,19 +197,12 @@ basilisk history --limit 20                      # Trade history
 
 | Layer | Technology |
 |-------|------------|
-| Backend | FastAPI, SQLAlchemy, Pydantic, httpx, Redis |
-| Frontend | Next.js 16, React 19, Zustand, Liveline, Recharts |
+| Backend | FastAPI, SQLAlchemy, Pydantic, httpx, websockets, Redis |
+| Frontend | Next.js 16, React 19, Zustand, Liveline, Recharts, Privy |
+| Trading | DFlow API (Solana), Privy wallets, Proof KYC |
+| Data | Kalshi (REST + WebSocket), Deribit, DFlow Metadata, CCXT |
 | iOS | SwiftUI, async/await, Keychain, LocalAuthentication |
 | CLI | Rust, Ratatui, Tokio, Reqwest, Clap |
-| Data | Kalshi API, Deribit API, CCXT (Kraken, Coinbase, Bitfinex, Bybit) |
-
-## Project Philosophy
-
-1. **EV-Driven** - Every trade decision backed by expected value calculation
-2. **Multi-Platform** - Trade from wherever you are
-3. **Single User** - No auth complexity, optimized for personal use
-4. **Real-Time** - SSE streaming, not polling
-5. **Revenue Sharing** - Builder Code integration for sustainable development
 
 ## License
 
@@ -275,4 +210,4 @@ MIT
 
 ---
 
-**Basilisk** - Revealing the hidden edge in prediction markets
+**Basilisk** — Revealing the hidden edge in prediction markets

@@ -23,10 +23,11 @@ class Settings(BaseSettings):
     # API
     api_v1_prefix: str = "/api/v1"
     cors_origins: list[str] = [
+        "http://localhost:3333",
         "http://localhost:3000",
-        "http://localhost:3001",  # Next.js alternate port
-        "http://localhost:5100",  # Next.js Turbopack default
-        "http://localhost:5173",  # Vite default
+        "http://localhost:3001",
+        "http://localhost:5100",
+        "http://localhost:5173",
     ]
 
     # Kalshi API
@@ -72,7 +73,14 @@ class Settings(BaseSettings):
 
     # DFlow API
     dflow_api_key: str = ""
-    dflow_base_url: str = "https://pond.dflow.net/api/v1"
+    dflow_trade_api_url: str = "https://dev-quote-api.dflow.net"
+    dflow_metadata_api_url: str = "https://dev-prediction-markets-api.dflow.net"
+
+    # Kalshi WebSocket
+    kalshi_ws_url: str = "wss://api.elections.kalshi.com/trade-api/ws/v2"
+    kalshi_ws_demo_url: str = "wss://demo-api.kalshi.co/trade-api/ws/v2"
+    kalshi_ws_ping_interval: int = 10
+    kalshi_ws_reconnect_max_delay: int = 30
 
     # Solana
     solana_rpc_url: str = "https://api.mainnet-beta.solana.com"

@@ -19,6 +19,7 @@ export interface VolatilityData {
   realized_vol: number;
   implied_vol: number;
   deribit_iv?: number;
+  deribit_iv_source?: "dvol" | "options_chain" | "none";
   kalshi_iv?: number;
   regime: string;
   vol_premium: number;

@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.privy_auth import get_current_user, get_current_user_optional
 from app.data.dflow_client import get_dflow_client
-from app.data.dflow_types import QuoteRequest, SwapRequest
+from app.data.dflow_types import OrderRequest
 from app.db.database import get_db
 from app.db.models import Trade, User
 from app.services.trade_executor import TradeExecutor, TradeRequest
@@ -28,7 +28,7 @@ class ExecuteTradeRequest(BaseModel):
     """Request to execute a trade."""
 
     ticker: str = Field(..., description="Market ticker symbol")
-    asset: str = Field(..., pattern="^(BTC|ETH|XRP)$", description="Asset type")
+    asset: str = Field(..., pattern="^(BTC|ETH|XRP|SOL|DOGE|HYPE|BNB)$", description="Asset type")
     direction: str = Field(..., pattern="^(YES|NO)$", description="Trade direction")
     strike: float = Field(..., description="Strike price")
     contracts: int = Field(..., ge=1, le=1000, description="Number of contracts")
@@ -353,155 +353,123 @@ async def get_balance(
 
 
 # ============================================================
-# DFlow Solana Trading Endpoints
+# DFlow Solana Trading Endpoints (GET /order flow)
 # ============================================================
 
 
-class DFlowQuoteRequest(BaseModel):
-    """Request for a DFlow swap quote."""
+class DFlowOrderRequest(BaseModel):
+    """Request for a DFlow trade order."""
 
     input_mint: str = Field(..., description="Input token mint address")
     output_mint: str = Field(..., description="Output token mint address")
-    amount: int = Field(..., description="Amount in token units")
-    side: str = Field(default="buy", pattern="^(buy|sell)$")
-    slippage_bps: int = Field(default=50, ge=1, le=500)
+    amount: int = Field(..., description="Amount in atomic units (USDC = 6 decimals)")
+    user_wallet: Optional[str] = Field(
+        default=None,
+        description="User's Solana wallet address. Omit to get quote only.",
+    )
+    slippage_bps: int | str = Field(
+        default="auto", description="Slippage tolerance in bps or 'auto'"
+    )
 
 
-class DFlowSwapRequest(BaseModel):
-    """Request to create a DFlow swap transaction."""
-
-    quote_id: str = Field(..., description="Quote ID from get_quote")
-    user_wallet: str = Field(..., description="User's Solana wallet address")
-
-
-@router.post("/quote")
-async def get_dflow_quote(
-    request: DFlowQuoteRequest,
+@router.post("/order")
+async def get_dflow_order(
+    request: DFlowOrderRequest,
     user: Optional[User] = Depends(get_current_user_optional),
 ) -> dict:
     """
-    Get a quote for swapping tokens via DFlow.
+    Get a trade order with a ready-to-sign Solana transaction.
 
-    Returns quote with price, output amount, fees, and expiration.
-    The quote can be used to create a swap transaction.
+    Replaces the legacy /quote + /swap two-step flow with a single call.
+    Returns a base64-encoded transaction that the user signs client-side.
+
+    Prediction market trades are always async — the frontend should poll
+    /order-status after submitting the signed transaction.
+
+    Omit user_wallet to get a quote without KYC verification (useful for
+    showing prices to unverified users).
     """
-    if not settings.dflow_api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="DFlow trading not configured",
-        )
-
     client = get_dflow_client()
 
+    # If user is authenticated, verify wallet matches
+    if request.user_wallet and user and user.wallet_address:
+        if user.wallet_address != request.user_wallet:
+            raise HTTPException(
+                status_code=403,
+                detail="Wallet address does not match authenticated user",
+            )
+
     try:
-        quote = await client.get_quote(
-            QuoteRequest(
+        order = await client.get_order(
+            OrderRequest(
                 input_mint=request.input_mint,
                 output_mint=request.output_mint,
                 amount=request.amount,
-                side=request.side,
+                user_public_key=request.user_wallet,
                 slippage_bps=request.slippage_bps,
             )
         )
 
         return {
-            "quote_id": quote.quote_id,
-            "input_mint": quote.input_mint,
-            "output_mint": quote.output_mint,
-            "input_amount": quote.input_amount,
-            "output_amount": quote.output_amount,
-            "price": quote.price,
-            "price_impact": quote.price_impact,
-            "fee": quote.fee,
-            "expires_at": quote.expires_at.isoformat(),
-            "slippage_bps": quote.slippage_bps,
+            "input_mint": order.input_mint,
+            "in_amount": order.in_amount,
+            "output_mint": order.output_mint,
+            "out_amount": order.out_amount,
+            "other_amount_threshold": order.other_amount_threshold,
+            "slippage_bps": order.slippage_bps,
+            "price_impact_pct": order.price_impact_pct,
+            "execution_mode": order.execution_mode,
+            "transaction": order.transaction,
+            "last_valid_block_height": order.last_valid_block_height,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/swap")
-async def create_dflow_swap(
-    request: DFlowSwapRequest,
-    user: User = Depends(get_current_user),
-) -> dict:
-    """
-    Create an unsigned swap transaction.
-
-    Requires authentication. The user must sign the returned transaction
-    with their wallet and broadcast it to Solana.
-    """
-    if not settings.dflow_api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="DFlow trading not configured",
-        )
-
-    # Verify wallet matches authenticated user
-    if user.wallet_address and user.wallet_address != request.user_wallet:
-        raise HTTPException(
-            status_code=403,
-            detail="Wallet address does not match authenticated user",
-        )
-
-    client = get_dflow_client()
-
-    try:
-        swap = await client.create_swap(
-            SwapRequest(
-                quote_id=request.quote_id,
-                user_wallet=request.user_wallet,
-            )
-        )
-
-        return {
-            "quote_id": swap.quote_id,
-            "transaction": swap.transaction,
-            "order_id": swap.order_id,
-            "expires_at": swap.expires_at.isoformat(),
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/orders/{order_id}")
+@router.get("/order-status")
 async def get_dflow_order_status(
-    order_id: str,
+    signature: str,
+    last_valid_block_height: Optional[int] = None,
     user: Optional[User] = Depends(get_current_user_optional),
 ) -> dict:
     """
-    Get the status of a DFlow order.
+    Poll order status by transaction signature.
 
-    Returns fill status, transaction signature, and other details.
+    For async trades (all prediction market trades), poll this endpoint
+    with a 2-second interval while status is 'open' or 'pendingClose'.
+
+    Status values: pending, open, pendingClose, closed, expired, failed
     """
-    if not settings.dflow_api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="DFlow trading not configured",
-        )
-
     client = get_dflow_client()
 
     try:
-        status = await client.get_order_status(order_id)
+        status = await client.get_order_status(
+            signature=signature,
+            last_valid_block_height=last_valid_block_height,
+        )
 
         return {
-            "order_id": status.order_id,
-            "quote_id": status.quote_id,
             "status": status.status,
-            "input_mint": status.input_mint,
-            "output_mint": status.output_mint,
-            "input_amount": status.input_amount,
-            "output_amount": status.output_amount,
-            "filled_amount": status.filled_amount,
-            "average_price": status.average_price,
-            "transaction_signature": status.transaction_signature,
-            "created_at": status.created_at.isoformat(),
-            "updated_at": status.updated_at.isoformat(),
-            "filled_at": status.filled_at.isoformat() if status.filled_at else None,
+            "fills": [
+                {"qty_in": f.qty_in, "qty_out": f.qty_out}
+                for f in status.fills
+            ],
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/verify/{address}")
+async def verify_wallet(address: str) -> dict:
+    """
+    Check if a wallet is verified via Proof KYC.
+
+    Required before buying prediction market outcome tokens.
+    Selling does not require verification.
+    """
+    client = get_dflow_client()
+    verified = await client.verify_wallet(address)
+    return {"verified": verified}
 
 
 @router.get("/markets/{ticker}/mints")
@@ -509,14 +477,8 @@ async def get_market_mints(ticker: str) -> dict:
     """
     Get YES/NO token mints for a market.
 
-    These mints are needed for creating swap transactions.
+    These mints are needed for creating trade orders.
     """
-    if not settings.dflow_api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="DFlow trading not configured",
-        )
-
     client = get_dflow_client()
 
     try:

@@ -30,6 +30,7 @@ dependencies = [
     "pybreaker>=1.4.1",
     "tenacity>=9.1.2",
     "pyjwt[crypto]>=2.8.0",
+    "websockets>=13.0",
 ]
 
 [project.optional-dependencies]

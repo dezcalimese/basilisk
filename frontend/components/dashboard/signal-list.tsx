@@ -9,7 +9,7 @@ import { useMemo, useState, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAnimatedNumber } from "@/hooks/use-animated-number";
-import { useRealtimeStore, useAnalyticalStore } from "@/lib/stores/multi-asset-store";
+import { useRealtimeStore, useAnalyticalStore, useMultiAssetStore } from "@/lib/stores/multi-asset-store";
 import { type TradeSignal } from "@/lib/api";
 import { GreeksProfile, calculateGreeksForSignal } from "@/components/dashboard/greeks-profile";
 import { TradeModal } from "@/components/trading/trade-modal";
@@ -99,8 +99,20 @@ function parseTickerInfo(ticker: string, expiryTime?: string) {
         .replace(" ", "")
         .toUpperCase();
 
+      // Show "Today" if expiry is within ~12 hours from now
+      const now = new Date();
+      const hoursUntilExpiry = (expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+      const todayFormatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        month: "short",
+        day: "numeric",
+      });
+      const todayStr = todayFormatter.format(now);
+      const isToday = formattedDate === todayStr || (hoursUntilExpiry > 0 && hoursUntilExpiry < 12);
+      const dateLabel = isToday ? "Today" : formattedDate;
+
       return {
-        date: formattedDate,
+        date: dateLabel,
         time: `${formattedTime} EST`,
         strike,
       };
@@ -118,6 +130,9 @@ export function SignalList({ signals, currentTime, selectedTicker, onSelectSigna
   // Trade modal state
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [selectedSignalForTrade, setSelectedSignalForTrade] = useState<TradeSignal | null>(null);
+  const selectedTimeframe = useMultiAssetStore((state) => state.selectedTimeframe);
+  const selectedAsset = useMultiAssetStore((state) => state.selectedAsset);
+  const timeframeLabel = selectedTimeframe === "15m" ? "15min" : "Hourly";
 
   // Filter out HOLD signals - only show actionable trades
   const actionableSignals = signals.filter(signal => signal.signal_type !== "HOLD");
@@ -156,7 +171,12 @@ export function SignalList({ signals, currentTime, selectedTicker, onSelectSigna
   if (actionableSignals.length === 0) {
     return (
       <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
-        <h2 className="text-lg font-bold mb-3">Active Signals</h2>
+        <div className="flex items-center gap-2 mb-3">
+          <h2 className="text-lg font-bold">Active Signals</h2>
+          <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+            {selectedAsset} {timeframeLabel}
+          </span>
+        </div>
         <p className="text-muted-foreground text-center py-8 text-sm">
           No active signals at the moment
         </p>
@@ -201,6 +221,7 @@ interface SignalRowProps {
 }
 
 function SignalRow({ signal, currentTime, isSelected, isBestStrike, onSelect, onTrade }: SignalRowProps) {
+  const selectedAsset = useMultiAssetStore((state) => state.selectedAsset);
   const tickerInfo = parseTickerInfo(signal.ticker, signal.expiry_time);
   const animatedEv = useAnimatedNumber(signal.expected_value ?? 0, 500);
   const animatedYes = useAnimatedNumber(signal.yes_price ?? 0, 500);
@@ -295,7 +316,7 @@ function SignalRow({ signal, currentTime, isSelected, isBestStrike, onSelect, on
               {isBestStrike && " ★ Best Strike"}
               {signal.current_btc_price && (
                 <span className="ml-1 text-xs font-normal">
-                  (BTC: ${signal.current_btc_price.toLocaleString()})
+                  ({selectedAsset}: ${signal.current_btc_price.toLocaleString()})
                 </span>
               )}
             </div>

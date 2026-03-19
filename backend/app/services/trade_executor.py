@@ -188,12 +188,14 @@ class TradeExecutor:
 
         # Extract asset from ticker (e.g., KXBTCD-25DEC02-B98000 -> BTC)
         asset = "BTC"  # Default
-        if "KXBTC" in signal.ticker:
-            asset = "BTC"
-        elif "KXETH" in signal.ticker:
-            asset = "ETH"
-        elif "KXXRP" in signal.ticker:
-            asset = "XRP"
+        ticker_map = {
+            "KXBTC": "BTC", "KXETH": "ETH", "KXXRP": "XRP",
+            "KXSOL": "SOL", "KXDOGE": "DOGE", "KXHYPE": "HYPE", "KXBNB": "BNB",
+        }
+        for prefix, symbol in ticker_map.items():
+            if prefix in signal.ticker:
+                asset = symbol
+                break
 
         # Extract strike from ticker or use recommended price
         strike = signal.recommended_price * 100  # Convert to strike format

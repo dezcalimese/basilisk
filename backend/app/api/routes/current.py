@@ -13,8 +13,11 @@ from sse_starlette.sse import EventSourceResponse
 from app.api.routes.signals import SignalResponse
 from app.data.bitcoin_client import BitcoinPriceClient
 from app.data.ethereum_client import EthereumPriceClient
+from app.data.generic_price_client import GenericPriceClient
 from app.data.ripple_client import RipplePriceClient
 from app.data.solana_client import SolanaPriceClient
+from app.data.kalshi_ws import get_ws_manager
+from app.data.ws_data_bus import get_data_bus
 from app.services.market_service import MarketService
 
 router = APIRouter()
@@ -39,6 +42,8 @@ def get_price_client(asset: str):
         return RipplePriceClient()
     elif asset_upper == "SOL":
         return SolanaPriceClient()
+    elif asset_upper in ("DOGE", "HYPE", "BNB"):
+        return GenericPriceClient(asset_upper)
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}")
 
@@ -71,8 +76,9 @@ async def get_asset_contracts(asset: str) -> dict:
     """
     asset_upper = asset.upper()
 
-    if asset_upper not in ["BTC", "ETH", "XRP", "SOL"]:
-        raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}. Supported: BTC, ETH, XRP, SOL")
+    supported = ["BTC", "ETH", "XRP", "SOL", "DOGE", "HYPE", "BNB"]
+    if asset_upper not in supported:
+        raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}. Supported: {', '.join(supported)}")
 
     try:
         print(f"🔍 Creating MarketService for {asset_upper}...")
@@ -89,6 +95,8 @@ async def get_asset_contracts(asset: str) -> dict:
             result = await market_service.get_ripple_hourly_contracts()
         elif asset_upper == "SOL":
             result = await market_service.get_solana_hourly_contracts()
+        else:
+            result = await market_service.get_generic_hourly_contracts(asset_upper)
 
         print(f"✓ Fetched {len(result.get('contracts', []))} {asset_upper} contracts")
 
@@ -135,8 +143,9 @@ async def get_asset_price(asset: str) -> AssetPriceResponse:
     """
     asset_upper = asset.upper()
 
-    if asset_upper not in ["BTC", "ETH", "XRP", "SOL"]:
-        raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}. Supported: BTC, ETH, XRP, SOL")
+    supported = ["BTC", "ETH", "XRP", "SOL", "DOGE", "HYPE", "BNB"]
+    if asset_upper not in supported:
+        raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}. Supported: {', '.join(supported)}")
 
     try:
         price_client = get_price_client(asset_upper)
@@ -163,16 +172,17 @@ async def get_btc_price() -> AssetPriceResponse:
     return await get_asset_price("btc")
 
 
-async def asset_trading_stream(request: Request, asset: str) -> AsyncGenerator:
+async def asset_trading_stream(request: Request, asset: str, timeframe: str = "hourly") -> AsyncGenerator:
     """
     SSE stream generator for real-time asset trading data.
 
     Streams:
     - Asset price updates every 3 seconds
-    - Contract data updates every 20 seconds
+    - Contract data updates every 20 seconds (hourly) or 10 seconds (15m)
 
     Args:
-        asset: Asset symbol (BTC, ETH, XRP, or SOL)
+        asset: Asset symbol (BTC, ETH, XRP, SOL, DOGE, HYPE, BNB)
+        timeframe: "hourly" or "15m"
     """
     asset_upper = asset.upper()
     price_client = get_price_client(asset_upper)
@@ -182,80 +192,152 @@ async def asset_trading_stream(request: Request, asset: str) -> AsyncGenerator:
     last_contract_update = 0.0
     last_price = 0.0
 
-    # Get the appropriate contract fetching method
-    if asset_upper == "BTC":
-        get_contracts = market_service.get_bitcoin_hourly_contracts
-    elif asset_upper == "ETH":
-        get_contracts = market_service.get_ethereum_hourly_contracts
-    elif asset_upper == "XRP":
-        get_contracts = market_service.get_ripple_hourly_contracts
-    elif asset_upper == "SOL":
-        get_contracts = market_service.get_solana_hourly_contracts
+    # Get the appropriate contract fetching method based on asset and timeframe
+    if timeframe == "15m":
+        # 15-minute contracts — all assets use the generic method
+        async def _get_15m():
+            return await market_service.get_generic_hourly_contracts(asset_upper, timeframe="15m")
+        get_contracts = _get_15m
     else:
-        raise ValueError(f"Unsupported asset: {asset}")
+        # Hourly contracts — use dedicated methods for original assets, generic for new ones
+        asset_method_map = {
+            "BTC": market_service.get_bitcoin_hourly_contracts,
+            "ETH": market_service.get_ethereum_hourly_contracts,
+            "XRP": market_service.get_ripple_hourly_contracts,
+            "SOL": market_service.get_solana_hourly_contracts,
+        }
+
+        if asset_upper in asset_method_map:
+            get_contracts = asset_method_map[asset_upper]
+        elif asset_upper in ("DOGE", "HYPE", "BNB"):
+            async def _get_generic():
+                return await market_service.get_generic_hourly_contracts(asset_upper)
+            get_contracts = _get_generic
+        else:
+            raise ValueError(f"Unsupported asset: {asset}")
 
     try:
+        # WebSocket integration
+        ws_manager = get_ws_manager()
+        data_bus = get_data_bus()
+        ticker_queue = await data_bus.subscribe(f"ticker:{asset_upper}")
+        ob_queue = await data_bus.subscribe(f"orderbook:{asset_upper}")
+        ws_subscribed = False
+
+        # Contract poll interval — 60s when WS is active, 20s as fallback
+        contract_interval = 60.0 if ws_manager.is_connected else 20.0
+
         # Send initial connection event
         yield {
             "event": "connected",
             "data": json.dumps({
                 "asset": asset_upper,
                 "status": "connected",
+                "ws_active": ws_manager.is_connected,
                 "timestamp": datetime.now(UTC).isoformat()
             })
         }
 
-        while True:
-            # Check if client disconnected
-            if await request.is_disconnected():
-                print(f"SSE client disconnected from {asset_upper} stream")
-                break
+        try:
+            while True:
+                # Check if client disconnected
+                if await request.is_disconnected():
+                    print(f"SSE client disconnected from {asset_upper} stream")
+                    break
 
-            current_time = asyncio.get_event_loop().time()
+                current_time = asyncio.get_event_loop().time()
 
-            # Stream price every 3 seconds
-            if current_time - last_price_update >= 3.0:
-                try:
-                    price = await price_client.get_spot_price()
-                    # Only send if price changed
-                    if abs(price - last_price) > 0.01:
+                # Drain WebSocket ticker updates (non-blocking)
+                while True:
+                    try:
+                        ticker_update = ticker_queue.get_nowait()
+                        # Push contract price update via SSE
                         yield {
-                            "event": f"{asset.lower()}_price",
+                            "event": "ticker_update",
                             "data": json.dumps({
                                 "asset": asset_upper,
-                                "price": price,
+                                **ticker_update,
                                 "timestamp": datetime.now(UTC).isoformat()
                             })
                         }
-                        last_price = price
-                    last_price_update = current_time
-                except Exception as e:
-                    print(f"Error fetching {asset_upper} price in stream: {e}")
+                    except asyncio.QueueEmpty:
+                        break
 
-            # Stream contract updates every 20 seconds
-            if current_time - last_contract_update >= 20.0:
-                try:
-                    result = await get_contracts()
-                    signals = [
-                        SignalResponse(**contract)
-                        for contract in result.get("contracts", [])
-                    ]
+                # Drain WebSocket orderbook updates (non-blocking)
+                while True:
+                    try:
+                        ob_update = ob_queue.get_nowait()
+                        yield {
+                            "event": "orderbook_update",
+                            "data": json.dumps({
+                                "asset": asset_upper,
+                                **ob_update,
+                                "timestamp": datetime.now(UTC).isoformat()
+                            })
+                        }
+                    except asyncio.QueueEmpty:
+                        break
 
-                    yield {
-                        "event": "contracts_update",
-                        "data": json.dumps({
-                            "asset": asset_upper,
-                            "contracts": [s.model_dump() for s in signals],
-                            "volatility": result.get("volatility", {}),
-                            "timestamp": datetime.now(UTC).isoformat()
-                        })
-                    }
-                    last_contract_update = current_time
-                except Exception as e:
-                    print(f"Error fetching {asset_upper} contracts in stream: {e}")
+                # Stream spot price every 3 seconds (from exchange, not Kalshi)
+                if current_time - last_price_update >= 3.0:
+                    try:
+                        price = await price_client.get_spot_price()
+                        if abs(price - last_price) > 0.01:
+                            yield {
+                                "event": f"{asset.lower()}_price",
+                                "data": json.dumps({
+                                    "asset": asset_upper,
+                                    "price": price,
+                                    "timestamp": datetime.now(UTC).isoformat()
+                                })
+                            }
+                            last_price = price
+                        last_price_update = current_time
+                    except Exception as e:
+                        print(f"Error fetching {asset_upper} price in stream: {e}")
 
-            # Small sleep to avoid tight loop
-            await asyncio.sleep(0.5)
+                # Stream contract updates (60s with WS, 20s without)
+                contract_interval = 60.0 if ws_manager.is_connected else 20.0
+                if current_time - last_contract_update >= contract_interval:
+                    try:
+                        result = await get_contracts()
+                        contracts = result.get("contracts", [])
+                        signals = [
+                            SignalResponse(**contract)
+                            for contract in contracts
+                        ]
+
+                        yield {
+                            "event": "contracts_update",
+                            "data": json.dumps({
+                                "asset": asset_upper,
+                                "contracts": [s.model_dump() for s in signals],
+                                "volatility": result.get("volatility", {}),
+                                "timestamp": datetime.now(UTC).isoformat()
+                            })
+                        }
+                        last_contract_update = current_time
+
+                        # Subscribe contract tickers to WS for real-time updates
+                        if not ws_subscribed and ws_manager.is_connected and contracts:
+                            tickers = [c.get("ticker", "") for c in contracts if c.get("ticker")]
+                            if tickers:
+                                ws_manager.ensure_subscribed(
+                                    ["ticker", "orderbook_delta"], tickers
+                                )
+                                ws_subscribed = True
+                                print(f"Kalshi WS: Subscribed {len(tickers)} {asset_upper} tickers")
+
+                    except Exception as e:
+                        print(f"Error fetching {asset_upper} contracts in stream: {e}")
+
+                # Small sleep to avoid tight loop
+                await asyncio.sleep(0.5)
+
+        finally:
+            # Clean up data bus subscriptions
+            await data_bus.unsubscribe(f"ticker:{asset_upper}", ticker_queue)
+            await data_bus.unsubscribe(f"orderbook:{asset_upper}", ob_queue)
 
     except asyncio.CancelledError:
         print(f"{asset_upper} SSE stream cancelled")
@@ -279,7 +361,7 @@ async def trading_data_stream(request: Request) -> AsyncGenerator:
 
 
 @router.get("/stream/{asset}")
-async def stream_asset_data(request: Request, asset: str):
+async def stream_asset_data(request: Request, asset: str, timeframe: str = "hourly"):
     """
     Server-Sent Events endpoint for real-time asset trading data.
 
@@ -287,15 +369,21 @@ async def stream_asset_data(request: Request, asset: str):
     Auto-reconnects on disconnect with Last-Event-ID support.
 
     Args:
-        asset: Asset symbol (btc, eth, xrp, or sol) - case insensitive
+        asset: Asset symbol (btc, eth, xrp, sol, doge, hype, bnb) - case insensitive
+        timeframe: Contract timeframe - "hourly" (default) or "15m"
     """
     asset_upper = asset.upper()
+    timeframe_lower = timeframe.lower()
 
-    if asset_upper not in ["BTC", "ETH", "XRP", "SOL"]:
-        raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}. Supported: BTC, ETH, XRP, SOL")
+    supported = ["BTC", "ETH", "XRP", "SOL", "DOGE", "HYPE", "BNB"]
+    if asset_upper not in supported:
+        raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}. Supported: {', '.join(supported)}")
+
+    if timeframe_lower not in ("hourly", "15m"):
+        raise HTTPException(status_code=400, detail=f"Unsupported timeframe: {timeframe}. Supported: hourly, 15m")
 
     return EventSourceResponse(
-        asset_trading_stream(request, asset_upper),
+        asset_trading_stream(request, asset_upper, timeframe_lower),
         headers={
             "X-Accel-Buffering": "no",  # Disable nginx buffering
             "Cache-Control": "no-cache",

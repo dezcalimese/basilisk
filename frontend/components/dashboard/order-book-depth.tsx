@@ -16,6 +16,7 @@ interface OrderBookData {
   no_asks: OrderBookLevel[];
   spread: number;
   mid_price: number;
+  source?: string;
 }
 
 interface OrderBookDepthProps {
@@ -45,7 +46,9 @@ export function OrderBookDepth({
 
     const fetchOrderBook = async () => {
       try {
-        const response = await fetch(`${apiUrl}/api/v1/orderbook/${ticker}`);
+        const response = await fetch(`${apiUrl}/api/v1/orderbook/${ticker}`, {
+          signal: AbortSignal.timeout(10000),
+        });
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -53,7 +56,7 @@ export function OrderBookDepth({
         setOrderBook(data);
         setError(null);
       } catch (err) {
-        console.error("Failed to fetch order book:", err);
+        console.error(`Failed to fetch order book for ${ticker}:`, err);
         setError(err instanceof Error ? err.message : "Failed to load");
       } finally {
         setLoading(false);
@@ -61,24 +64,16 @@ export function OrderBookDepth({
     };
 
     fetchOrderBook();
-    const interval = setInterval(fetchOrderBook, 5000); // Update every 5 seconds
+    const interval = setInterval(fetchOrderBook, 15000); // Update every 15 seconds to avoid rate limits
 
     return () => clearInterval(interval);
   }, [ticker, apiUrl]);
 
-  if (loading) {
+  if (loading && ticker) {
     return (
       <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
-        <h2 className="text-lg font-bold mb-3">Order Book Depth</h2>
-        <div className="flex-1 space-y-2">
-          {/* Skeleton order book rows */}
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="flex gap-2">
-              <div className="flex-1 h-6 bg-muted/30 rounded animate-pulse" style={{ opacity: 1 - i * 0.12 }} />
-              <div className="w-16 h-6 bg-muted/30 rounded animate-pulse" />
-            </div>
-          ))}
-        </div>
+        <h2 className="text-lg font-bold mb-3">Order Book</h2>
+        <p className="text-sm text-muted-foreground animate-pulse">Loading...</p>
       </div>
     );
   }
@@ -86,9 +81,24 @@ export function OrderBookDepth({
   if (error || !orderBook) {
     return (
       <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
-        <h2 className="text-lg font-bold mb-3">Order Book Depth</h2>
+        <h2 className="text-lg font-bold mb-3">Order Book</h2>
         <p className="text-sm text-muted-foreground">
-          Select a contract to view order book
+          {!ticker ? "Select a contract to view order book" : "Loading order book..."}
+        </p>
+      </div>
+    );
+  }
+
+  // Check if order book is actually empty (no bids/asks on either side)
+  const hasData = orderBook.yes_bids.length > 0 || orderBook.yes_asks.length > 0
+    || orderBook.no_bids.length > 0 || orderBook.no_asks.length > 0;
+
+  if (!hasData) {
+    return (
+      <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
+        <h2 className="text-lg font-bold mb-3">Order Book</h2>
+        <p className="text-sm text-muted-foreground">
+          No order book data available for this contract
         </p>
       </div>
     );
@@ -104,7 +114,14 @@ export function OrderBookDepth({
   return (
     <div className="glass-card rounded-2xl p-6 h-full flex flex-col">
       <div className="mb-4">
-        <h2 className="text-lg font-bold">Order Book</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-bold">Order Book</h2>
+          {orderBook.source && orderBook.source !== "none" && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+              {orderBook.source === "dflow" ? "DFlow" : orderBook.source === "kalshi_ws" ? "Live" : "Kalshi"}
+            </span>
+          )}
+        </div>
         <p className="text-xs text-muted-foreground font-mono">
           Spread: {(orderBook.spread * 100).toFixed(1)}¢ | Mid: {(orderBook.mid_price * 100).toFixed(1)}¢
         </p>

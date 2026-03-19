@@ -14,8 +14,19 @@ class DFlowEvent(BaseModel):
     title: str
     subtitle: Optional[str] = None
     status: str = Field(description="Event status: active, closed, settled")
-    expiration_time: datetime
+    expiration_time: Optional[datetime] = None
     settlement_time: Optional[datetime] = None
+
+
+class DFlowMarketAccountInfo(BaseModel):
+    """Account info for a specific settlement mint within a market."""
+
+    market_ledger: str = Field(description="Market ledger mint")
+    yes_mint: str = Field(description="YES outcome mint address")
+    no_mint: str = Field(description="NO outcome mint address")
+    is_initialized: bool = False
+    redemption_status: Optional[str] = None
+    scalar_outcome_pct: Optional[int] = None
 
 
 class DFlowMarket(BaseModel):
@@ -26,33 +37,58 @@ class DFlowMarket(BaseModel):
     title: str
     subtitle: Optional[str] = None
     status: str
+    market_type: Optional[str] = None
 
-    # Strike information
-    strike_price: float = Field(description="Strike price in USD")
-    strike_type: str = Field(description="Strike type: above, below, range")
-
-    # Token mints (Solana SPL tokens)
-    yes_mint: str = Field(description="Solana mint address for YES tokens")
-    no_mint: str = Field(description="Solana mint address for NO tokens")
+    # YES/NO subtitles
+    yes_sub_title: Optional[str] = None
+    no_sub_title: Optional[str] = None
 
     # Market data
-    yes_bid: Optional[float] = None
-    yes_ask: Optional[float] = None
-    no_bid: Optional[float] = None
-    no_ask: Optional[float] = None
-    last_price: Optional[float] = None
-    volume_24h: Optional[float] = None
+    yes_bid: Optional[str] = None
+    yes_ask: Optional[str] = None
+    no_bid: Optional[str] = None
+    no_ask: Optional[str] = None
+    volume: Optional[int] = None
     open_interest: Optional[int] = None
 
     # Times
-    expiration_time: datetime
-    close_time: Optional[datetime] = None
+    open_time: Optional[int] = None
+    close_time: Optional[int] = None
+    expiration_time: Optional[int] = None
+
+    # Accounts keyed by settlement mint
+    accounts: dict[str, DFlowMarketAccountInfo] = Field(default_factory=dict)
+
+    # Resolution
+    result: Optional[str] = None
+    can_close_early: bool = False
+
+    @property
+    def yes_mint(self) -> Optional[str]:
+        """Get YES mint from first account entry."""
+        for acct in self.accounts.values():
+            return acct.yes_mint
+        return None
+
+    @property
+    def no_mint(self) -> Optional[str]:
+        """Get NO mint from first account entry."""
+        for acct in self.accounts.values():
+            return acct.no_mint
+        return None
+
+    @property
+    def is_initialized(self) -> bool:
+        """Check if market is initialized on-chain."""
+        for acct in self.accounts.values():
+            return acct.is_initialized
+        return False
 
 
 class DFlowOrderbookLevel(BaseModel):
     """Single level in the orderbook."""
 
-    price: float = Field(description="Price in cents (1-99)")
+    price: str = Field(description="Price as string (4-decimal probability)")
     quantity: int = Field(description="Number of contracts")
 
 
@@ -60,76 +96,93 @@ class DFlowOrderbook(BaseModel):
     """DFlow orderbook for a market."""
 
     ticker: str
-    yes_bids: list[DFlowOrderbookLevel] = []
-    yes_asks: list[DFlowOrderbookLevel] = []
-    no_bids: list[DFlowOrderbookLevel] = []
-    no_asks: list[DFlowOrderbookLevel] = []
-    timestamp: datetime
+    yes_bids: dict[str, int] = Field(default_factory=dict)
+    no_bids: dict[str, int] = Field(default_factory=dict)
+    sequence: Optional[int] = None
 
 
-class DFlowQuote(BaseModel):
-    """Quote for a swap transaction."""
-
-    quote_id: str = Field(description="Unique quote identifier")
-    input_mint: str = Field(description="Input token mint (e.g., USDC)")
-    output_mint: str = Field(description="Output token mint (e.g., YES/NO token)")
-    input_amount: int = Field(description="Input amount in token units")
-    output_amount: int = Field(description="Expected output amount")
-    price: float = Field(description="Effective price per contract")
-    price_impact: float = Field(description="Price impact percentage")
-    fee: float = Field(description="Fee amount in USD")
-    expires_at: datetime = Field(description="Quote expiration time")
-    slippage_bps: int = Field(default=50, description="Slippage tolerance in basis points")
+# ============================================================
+# Trade API types (GET /order flow)
+# ============================================================
 
 
-class DFlowSwapTransaction(BaseModel):
-    """Unsigned Solana transaction for executing a swap."""
-
-    quote_id: str
-    transaction: str = Field(description="Base64-encoded unsigned transaction")
-    order_id: str = Field(description="Order ID for tracking")
-    expires_at: datetime
-
-
-class DFlowOrderStatus(BaseModel):
-    """Status of a DFlow order."""
-
-    order_id: str
-    quote_id: str
-    status: str = Field(description="pending, filling, filled, cancelled, expired")
-    input_mint: str
-    output_mint: str
-    input_amount: int
-    output_amount: int
-    filled_amount: int = Field(default=0)
-    average_price: Optional[float] = None
-    transaction_signature: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-    filled_at: Optional[datetime] = None
-
-
-# Request models
-
-
-class QuoteRequest(BaseModel):
-    """Request for a swap quote."""
+class OrderRequest(BaseModel):
+    """Request parameters for GET /order."""
 
     input_mint: str = Field(description="Input token mint address")
     output_mint: str = Field(description="Output token mint address")
-    amount: int = Field(description="Amount in token units")
-    side: str = Field(default="buy", description="buy or sell")
-    slippage_bps: int = Field(default=50, description="Slippage tolerance in basis points")
+    amount: int = Field(description="Amount in atomic units (scaled by decimals)")
+    user_public_key: Optional[str] = Field(
+        default=None,
+        description="User's Solana wallet address. If provided, response includes transaction.",
+    )
+    slippage_bps: int | str = Field(
+        default="auto", description="Slippage tolerance in bps or 'auto'"
+    )
+    prediction_market_slippage_bps: Optional[int | str] = Field(
+        default=None, description="Slippage for prediction market leg"
+    )
+
+
+class DFlowOrderResponse(BaseModel):
+    """Response from GET /order."""
+
+    input_mint: str
+    in_amount: str = Field(description="Max input amount (scaled integer as string)")
+    output_mint: str
+    out_amount: str = Field(description="Expected output amount (scaled integer as string)")
+    other_amount_threshold: Optional[str] = Field(
+        default=None, description="Min output after fees"
+    )
+    slippage_bps: Optional[int] = None
+    price_impact_pct: Optional[str] = None
+    execution_mode: str = Field(description="'sync' or 'async'")
+    transaction: Optional[str] = Field(
+        default=None, description="Base64-encoded transaction to sign"
+    )
+    last_valid_block_height: Optional[int] = None
+    revert_mint: Optional[str] = None
+
+
+class DFlowFill(BaseModel):
+    """A single fill within an order."""
+
+    qty_in: Optional[int] = None
+    qty_out: Optional[int] = None
+
+
+class DFlowOrderStatus(BaseModel):
+    """Status of a DFlow order (polled by tx signature)."""
+
+    status: str = Field(
+        description="pending, open, pendingClose, closed, expired, failed"
+    )
+    fills: list[DFlowFill] = Field(default_factory=list)
+
+
+# Legacy request models (kept for backward compatibility during migration)
+
+
+class QuoteRequest(BaseModel):
+    """Legacy: Request for a swap quote. Use OrderRequest instead."""
+
+    input_mint: str
+    output_mint: str
+    amount: int
+    side: str = "buy"
+    slippage_bps: int = 50
 
 
 class SwapRequest(BaseModel):
-    """Request to create a swap transaction."""
+    """Legacy: Request to create a swap transaction. Use OrderRequest instead."""
 
     quote_id: str
-    user_wallet: str = Field(description="User's Solana wallet address")
+    user_wallet: str
 
 
-# Mapped types for internal use
+# ============================================================
+# Internal types
+# ============================================================
 
 
 class TradeSignalWithMints(BaseModel):

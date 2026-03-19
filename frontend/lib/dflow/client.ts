@@ -1,5 +1,11 @@
 /**
- * DFlow API client for Solana-based prediction market trading
+ * DFlow API client for Solana-based prediction market trading.
+ *
+ * Uses the new GET /order flow (replaces legacy /quote + /swap).
+ * All prediction market trades are async — poll /order-status after submitting.
+ *
+ * CORS: DFlow Trade API has no CORS headers, so all requests are proxied
+ * through our backend (required per DFlow docs).
  */
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -11,48 +17,35 @@ export const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 // Types
 // ============================================================
 
-export type QuoteRequest = {
+export type OrderRequest = {
   inputMint: string;
   outputMint: string;
-  amount: number; // In token units (USDC has 6 decimals)
-  side: "buy" | "sell";
-  slippageBps?: number;
+  amount: number; // In atomic units (USDC = 6 decimals)
+  userWallet?: string; // Omit to get quote only (no KYC required)
+  slippageBps?: number | "auto";
 };
 
-export type DFlowQuote = {
-  quoteId: string;
+export type DFlowOrderResponse = {
   inputMint: string;
+  inAmount: string; // Scaled integer as string
   outputMint: string;
-  inputAmount: number;
-  outputAmount: number;
-  price: number; // Effective price per contract
-  priceImpact: number; // Percentage
-  fee: number; // USD
-  expiresAt: Date;
-  slippageBps: number;
+  outAmount: string; // Scaled integer as string
+  otherAmountThreshold: string | null;
+  slippageBps: number | null;
+  priceImpactPct: string | null;
+  executionMode: "sync" | "async";
+  transaction: string | null; // Base64-encoded, null if no userWallet
+  lastValidBlockHeight: number | null;
 };
 
-export type SwapTransaction = {
-  quoteId: string;
-  transaction: string; // Base64-encoded unsigned transaction
-  orderId: string;
-  expiresAt: Date;
+export type DFlowFill = {
+  qty_in: number | null;
+  qty_out: number | null;
 };
 
-export type OrderStatus = {
-  orderId: string;
-  quoteId: string;
-  status: "pending" | "filling" | "filled" | "cancelled" | "expired";
-  inputMint: string;
-  outputMint: string;
-  inputAmount: number;
-  outputAmount: number;
-  filledAmount: number;
-  averagePrice: number | null;
-  transactionSignature: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  filledAt: Date | null;
+export type OrderStatusResponse = {
+  status: "pending" | "open" | "pendingClose" | "closed" | "expired" | "failed";
+  fills: DFlowFill[];
 };
 
 export type MarketMints = {
@@ -111,112 +104,81 @@ class DFlowClient {
   }
 
   // ============================================================
-  // Quote & Swap
+  // Trade API (proxied through backend)
   // ============================================================
 
   /**
-   * Get a quote for swapping tokens
+   * Get a trade order with a ready-to-sign transaction.
+   *
+   * Single call replaces the legacy quote + swap two-step flow.
+   * Omit userWallet to get a quote without KYC (for price display).
    */
-  async getQuote(request: QuoteRequest): Promise<DFlowQuote> {
+  async getOrder(request: OrderRequest): Promise<DFlowOrderResponse> {
     const data = await this.request<{
-      quote_id: string;
       input_mint: string;
+      in_amount: string;
       output_mint: string;
-      input_amount: number;
-      output_amount: number;
-      price: number;
-      price_impact: number;
-      fee: number;
-      expires_at: string;
-      slippage_bps: number;
-    }>("/api/v1/trade/quote", {
+      out_amount: string;
+      other_amount_threshold: string | null;
+      slippage_bps: number | null;
+      price_impact_pct: string | null;
+      execution_mode: string;
+      transaction: string | null;
+      last_valid_block_height: number | null;
+    }>("/api/v1/trade/order", {
       method: "POST",
       body: JSON.stringify({
         input_mint: request.inputMint,
         output_mint: request.outputMint,
         amount: request.amount,
-        side: request.side,
-        slippage_bps: request.slippageBps ?? 50,
+        user_wallet: request.userWallet,
+        slippage_bps: request.slippageBps ?? "auto",
       }),
     });
 
     return {
-      quoteId: data.quote_id,
       inputMint: data.input_mint,
+      inAmount: data.in_amount,
       outputMint: data.output_mint,
-      inputAmount: data.input_amount,
-      outputAmount: data.output_amount,
-      price: data.price,
-      priceImpact: data.price_impact,
-      fee: data.fee,
-      expiresAt: new Date(data.expires_at),
+      outAmount: data.out_amount,
+      otherAmountThreshold: data.other_amount_threshold,
       slippageBps: data.slippage_bps,
-    };
-  }
-
-  /**
-   * Create an unsigned swap transaction
-   */
-  async createSwap(
-    quoteId: string,
-    userWallet: string
-  ): Promise<SwapTransaction> {
-    const data = await this.request<{
-      quote_id: string;
-      transaction: string;
-      order_id: string;
-      expires_at: string;
-    }>("/api/v1/trade/swap", {
-      method: "POST",
-      body: JSON.stringify({
-        quote_id: quoteId,
-        user_wallet: userWallet,
-      }),
-    });
-
-    return {
-      quoteId: data.quote_id,
+      priceImpactPct: data.price_impact_pct,
+      executionMode: data.execution_mode as "sync" | "async",
       transaction: data.transaction,
-      orderId: data.order_id,
-      expiresAt: new Date(data.expires_at),
+      lastValidBlockHeight: data.last_valid_block_height,
     };
   }
 
   /**
-   * Get the status of an order
+   * Poll order status by transaction signature.
+   *
+   * For async trades (all prediction market trades), poll with 2s interval
+   * while status is 'open' or 'pendingClose'.
    */
-  async getOrderStatus(orderId: string): Promise<OrderStatus> {
-    const data = await this.request<{
-      order_id: string;
-      quote_id: string;
-      status: string;
-      input_mint: string;
-      output_mint: string;
-      input_amount: number;
-      output_amount: number;
-      filled_amount: number;
-      average_price: number | null;
-      transaction_signature: string | null;
-      created_at: string;
-      updated_at: string;
-      filled_at: string | null;
-    }>(`/api/v1/trade/orders/${orderId}`);
+  async getOrderStatus(
+    signature: string,
+    lastValidBlockHeight?: number
+  ): Promise<OrderStatusResponse> {
+    const params = new URLSearchParams({ signature });
+    if (lastValidBlockHeight !== undefined) {
+      params.set("last_valid_block_height", lastValidBlockHeight.toString());
+    }
 
-    return {
-      orderId: data.order_id,
-      quoteId: data.quote_id,
-      status: data.status as OrderStatus["status"],
-      inputMint: data.input_mint,
-      outputMint: data.output_mint,
-      inputAmount: data.input_amount,
-      outputAmount: data.output_amount,
-      filledAmount: data.filled_amount,
-      averagePrice: data.average_price,
-      transactionSignature: data.transaction_signature,
-      createdAt: new Date(data.created_at),
-      updatedAt: new Date(data.updated_at),
-      filledAt: data.filled_at ? new Date(data.filled_at) : null,
-    };
+    return this.request<OrderStatusResponse>(
+      `/api/v1/trade/order-status?${params.toString()}`
+    );
+  }
+
+  /**
+   * Check if a wallet is verified via Proof KYC.
+   * Required before buying prediction market outcome tokens.
+   */
+  async verifyWallet(address: string): Promise<boolean> {
+    const data = await this.request<{ verified: boolean }>(
+      `/api/v1/trade/verify/${address}`
+    );
+    return data.verified;
   }
 
   // ============================================================
@@ -251,14 +213,14 @@ export const dflowClient = new DFlowClient();
 // ============================================================
 
 /**
- * Convert USDC amount to token units (6 decimals)
+ * Convert USDC amount to atomic units (6 decimals)
  */
 export function usdcToUnits(amount: number): number {
   return Math.floor(amount * 1_000_000);
 }
 
 /**
- * Convert token units to USDC amount
+ * Convert atomic units to USDC amount
  */
 export function unitsToUsdc(units: number): number {
   return units / 1_000_000;
@@ -289,4 +251,20 @@ export function calculatePotentialProfit(
   const cost = (priceInCents / 100) * contracts;
   const maxPayout = contracts;
   return maxPayout - cost;
+}
+
+/**
+ * Check if current time is within Kalshi maintenance window.
+ * Thursdays 3:00 AM to 5:00 AM ET — orders submitted during
+ * this window will be reverted.
+ */
+export function isMaintenanceWindow(): boolean {
+  const now = new Date();
+  // Convert to ET
+  const et = new Date(
+    now.toLocaleString("en-US", { timeZone: "America/New_York" })
+  );
+  const day = et.getDay(); // 4 = Thursday
+  const hour = et.getHours();
+  return day === 4 && hour >= 3 && hour < 5;
 }

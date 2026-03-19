@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.data.bitcoin_client import BitcoinPriceClient
 from app.data.dflow_client import DFlowClient, get_dflow_client
 from app.data.ethereum_client import EthereumPriceClient
+from app.data.generic_price_client import GenericPriceClient
 from app.data.kalshi_client import KalshiClient
 from app.data.ripple_client import RipplePriceClient
 from app.data.solana_client import SolanaPriceClient
@@ -30,6 +31,23 @@ class MarketService:
         self.predictor = ProbabilityPredictor()
         self.vol_regime = VolatilityRegime()
         self.order_flow = OrderFlowAnalyzer()
+
+        # Generic price clients for new assets
+        self.doge_client = GenericPriceClient("DOGE")
+        self.hype_client = GenericPriceClient("HYPE")
+        self.bnb_client = GenericPriceClient("BNB")
+
+        # Kalshi series tickers for each asset/timeframe
+        # Hourly contracts use "D" suffix, 15-min use "15M"
+        self.SERIES_TICKERS: dict[str, dict[str, str]] = {
+            "BTC": {"hourly": "KXBTCD", "15m": "KXBTC15M"},
+            "ETH": {"hourly": "KXETHD", "15m": "KXETH15M"},
+            "XRP": {"hourly": "KXXRPD", "15m": "KXXRP15M"},
+            "SOL": {"hourly": "KXSOLD", "15m": "KXSOL15M"},
+            "DOGE": {"hourly": "KXDOGED", "15m": "KXDOGE15M"},
+            "HYPE": {"hourly": "KXHYPED", "15m": "KXHYPE15M"},
+            "BNB": {"hourly": "KXBNBD", "15m": "KXBNB15M"},
+        }
 
         # DFlow client for Solana token mints (optional - degrades gracefully)
         self.dflow_client: DFlowClient | None = None
@@ -296,7 +314,7 @@ class MarketService:
             try:
                 print("\n📊 Running volatility analysis...")
                 volatility_data = await self.vol_regime.analyze_volatility(
-                    candles, processed_contracts, current_btc_price
+                    candles, processed_contracts, current_btc_price, currency="BTC"
                 )
                 print(f"✓ Volatility Regime: {volatility_data.get('regime', 'UNKNOWN')}")
 
@@ -788,11 +806,23 @@ class MarketService:
             except Exception as e:
                 print(f"✗ Failed to calculate volatility: {e}")
 
-        # Process contracts (simplified - no DVOL yet)
+        # Fetch Deribit DVOL for ETH
+        print("\n📊 Fetching Deribit DVOL for ETH...")
+        eth_dvol = await self.vol_regime.fetch_deribit_dvol("ETH")
+        if eth_dvol is not None:
+            print(f"✓ Deribit ETH DVOL: {eth_dvol:.1%} (using for Black-Scholes)")
+            volatility_data["deribit_iv"] = eth_dvol
+            volatility_data["deribit_iv_source"] = "dvol"
+            volatility_data["implied_vol"] = eth_dvol
+        else:
+            print("⚠️  Deribit ETH DVOL unavailable, using realized vol only")
+            volatility_data["deribit_iv_source"] = "none"
+
+        # Process contracts with DVOL
         processed_contracts = []
         for contract_id, market in enumerate(asset_contracts, start=1):
             try:
-                contract_data = await self._process_contract(market, current_eth_price, contract_id, dvol=None)
+                contract_data = await self._process_contract(market, current_eth_price, contract_id, dvol=eth_dvol)
                 if contract_data:
                     processed_contracts.append(contract_data)
             except Exception as e:
@@ -919,11 +949,23 @@ class MarketService:
             except Exception as e:
                 print(f"✗ Failed to calculate volatility: {e}")
 
-        # Process contracts (simplified - no DVOL yet)
+        # Fetch Deribit IV for XRP (options chain — no DVOL index)
+        print("\n📊 Fetching Deribit options IV for XRP...")
+        xrp_iv, xrp_iv_source = await self.vol_regime.fetch_iv_for_asset("XRP", current_xrp_price)
+        if xrp_iv is not None:
+            print(f"✓ Deribit XRP IV: {xrp_iv:.1%} (source: {xrp_iv_source})")
+            volatility_data["deribit_iv"] = xrp_iv
+            volatility_data["deribit_iv_source"] = xrp_iv_source
+            volatility_data["implied_vol"] = xrp_iv
+        else:
+            print("⚠️  Deribit XRP IV unavailable — no options market reference")
+            volatility_data["deribit_iv_source"] = "none"
+
+        # Process contracts with IV
         processed_contracts = []
         for contract_id, market in enumerate(asset_contracts, start=1):
             try:
-                contract_data = await self._process_contract(market, current_xrp_price, contract_id, dvol=None)
+                contract_data = await self._process_contract(market, current_xrp_price, contract_id, dvol=xrp_iv)
                 if contract_data:
                     processed_contracts.append(contract_data)
             except Exception as e:
@@ -1050,11 +1092,23 @@ class MarketService:
             except Exception as e:
                 print(f"✗ Failed to calculate volatility: {e}")
 
-        # Process contracts (simplified - no DVOL yet)
+        # Fetch Deribit IV for SOL (options chain — no DVOL index)
+        print("\n📊 Fetching Deribit options IV for SOL...")
+        sol_iv, sol_iv_source = await self.vol_regime.fetch_iv_for_asset("SOL", current_sol_price)
+        if sol_iv is not None:
+            print(f"✓ Deribit SOL IV: {sol_iv:.1%} (source: {sol_iv_source})")
+            volatility_data["deribit_iv"] = sol_iv
+            volatility_data["deribit_iv_source"] = sol_iv_source
+            volatility_data["implied_vol"] = sol_iv
+        else:
+            print("⚠️  Deribit SOL IV unavailable — no options market reference")
+            volatility_data["deribit_iv_source"] = "none"
+
+        # Process contracts with IV
         processed_contracts = []
         for contract_id, market in enumerate(asset_contracts, start=1):
             try:
-                contract_data = await self._process_contract(market, current_sol_price, contract_id, dvol=None)
+                contract_data = await self._process_contract(market, current_sol_price, contract_id, dvol=sol_iv)
                 if contract_data:
                     processed_contracts.append(contract_data)
             except Exception as e:
@@ -1069,6 +1123,159 @@ class MarketService:
         return {
             "contracts": top_contracts,
             "volatility": volatility_data
+        }
+
+    async def get_generic_hourly_contracts(self, asset: str, timeframe: str = "hourly") -> dict[str, Any]:
+        """
+        Fetch contracts for any supported asset and timeframe.
+
+        Generic version of get_bitcoin_hourly_contracts etc. Supports both
+        hourly and 15-minute contract timeframes.
+
+        Args:
+            asset: Asset symbol (e.g., "DOGE", "HYPE", "BNB", or any supported)
+            timeframe: "hourly" or "15m"
+        """
+        asset_upper = asset.upper()
+        series_config = self.SERIES_TICKERS.get(asset_upper)
+        if not series_config:
+            print(f"✗ Unsupported asset: {asset}")
+            return {"contracts": [], "volatility": self._get_default_volatility()}
+
+        series_ticker = series_config.get(timeframe, series_config["hourly"])
+
+        # Get price client
+        client_map = {
+            "DOGE": self.doge_client,
+            "HYPE": self.hype_client,
+            "BNB": self.bnb_client,
+        }
+        price_client = client_map.get(asset_upper)
+        if not price_client:
+            print(f"✗ No price client for {asset_upper}")
+            return {"contracts": [], "volatility": self._get_default_volatility()}
+
+        # Get current price
+        try:
+            current_price = await price_client.get_spot_price()
+            print(f"✓ {asset_upper} price: ${current_price:,.4f}")
+        except Exception as e:
+            print(f"✗ Failed to fetch {asset_upper} price: {e}")
+            return {"contracts": [], "volatility": self._get_default_volatility()}
+
+        # Fetch historical candles
+        try:
+            candles = await price_client.get_historical_candles(hours=168)
+            print(f"✓ Fetched {len(candles)} hourly candles for {asset_upper}")
+        except Exception as e:
+            print(f"✗ Failed to fetch candles: {e}")
+            candles = []
+
+        now_utc = datetime.now(UTC)
+        est = ZoneInfo("America/New_York")
+
+        # Fetch markets from Kalshi
+        try:
+            print(f"Fetching {series_ticker} markets from Kalshi...")
+            markets: list[dict[str, Any]] = []
+            cursor: str | None = None
+            max_pages = 10
+            page = 0
+
+            while page < max_pages:
+                page += 1
+                markets_response = await self.kalshi_client.get_markets(
+                    series_ticker=series_ticker, limit=1000, cursor=cursor
+                )
+                batch = markets_response.get("markets", [])
+                markets.extend(batch)
+                cursor = markets_response.get("cursor")
+                if not cursor or len(batch) < 1000:
+                    break
+
+            print(f"✓ Received {len(markets)} {series_ticker} markets from Kalshi")
+        except Exception as e:
+            print(f"✗ Failed to fetch {series_ticker} markets: {e}")
+            return {"contracts": [], "volatility": self._get_default_volatility()}
+
+        if not markets:
+            return {"contracts": [], "volatility": self._get_default_volatility()}
+
+        # Filter for active contracts with upcoming expiry
+        contracts_by_expiry: dict[datetime, list] = {}
+        active_count = 0
+        expired_count = 0
+
+        for market in markets:
+            close_time_str = market.get("close_time") or market.get("expected_expiration_time")
+            if not close_time_str:
+                continue
+
+            try:
+                close_time = datetime.fromisoformat(close_time_str.replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                continue
+
+            if close_time <= now_utc:
+                expired_count += 1
+                continue
+
+            active_count += 1
+            expiry_utc = close_time
+            if expiry_utc not in contracts_by_expiry:
+                contracts_by_expiry[expiry_utc] = []
+            contracts_by_expiry[expiry_utc].append(market)
+
+        # Get contracts for the next available expiry
+        asset_contracts = []
+        if contracts_by_expiry:
+            sorted_expiries = sorted(contracts_by_expiry.items(), key=lambda x: x[0])
+            selected_expiry, selected_markets = sorted_expiries[0]
+            asset_contracts = selected_markets
+            expiry_est = selected_expiry.astimezone(est)
+            print(f"✓ Using {len(asset_contracts)} contracts expiring {expiry_est.strftime('%b %d %I%p %Z')}")
+
+        # Calculate volatility
+        volatility_data = self._get_default_volatility()
+        if candles:
+            try:
+                realized_vol = self.vol_regime.calculate_realized_volatility(candles)
+                volatility_data["realized_vol"] = realized_vol
+                volatility_data["realized_vol_close"] = realized_vol
+                volatility_data["realized_vol_parkinson"] = realized_vol
+            except Exception as e:
+                print(f"✗ Failed to calculate volatility: {e}")
+
+        # Fetch Deribit IV if available
+        iv, iv_source = await self.vol_regime.fetch_iv_for_asset(asset_upper, current_price)
+        if iv is not None:
+            print(f"✓ Deribit {asset_upper} IV: {iv:.1%} (source: {iv_source})")
+            volatility_data["deribit_iv"] = iv
+            volatility_data["deribit_iv_source"] = iv_source
+            volatility_data["implied_vol"] = iv
+        else:
+            print(f"⚠️  No Deribit IV available for {asset_upper}")
+            volatility_data["deribit_iv_source"] = "none"
+
+        # Process contracts
+        processed_contracts = []
+        for contract_id, market in enumerate(asset_contracts, start=1):
+            try:
+                contract_data = await self._process_contract(
+                    market, current_price, contract_id, dvol=iv
+                )
+                if contract_data:
+                    processed_contracts.append(contract_data)
+            except Exception as e:
+                print(f"✗ Error processing contract: {e}")
+
+        processed_contracts.sort(key=lambda x: x["expected_value"], reverse=True)
+        top_contracts = processed_contracts[:10]
+        print(f"✓ Processed {len(processed_contracts)} contracts, returning top {len(top_contracts)} by EV")
+
+        return {
+            "contracts": top_contracts,
+            "volatility": volatility_data,
         }
 
     def _get_default_volatility(self) -> dict[str, Any]:

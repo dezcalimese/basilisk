@@ -97,6 +97,141 @@ class VolatilityRegime:
             # Return None to indicate failure (caller should handle)
             return None
 
+    # Assets that have a DVOL index on Deribit
+    DVOL_SUPPORTED = {"BTC", "ETH"}
+
+    # Assets with options chains on Deribit (can derive ATM IV)
+    OPTIONS_CHAIN_SUPPORTED = {"BTC", "ETH", "SOL", "XRP", "AVAX", "TRX"}
+
+    # Assets with no Deribit coverage at all
+    NO_DERIBIT_COVERAGE = {"DOGE", "SHIB", "HYPE", "BNB"}
+
+    async def fetch_deribit_options_iv(
+        self, currency: str, current_price: float
+    ) -> float | None:
+        """
+        Derive ATM implied volatility from Deribit options chain.
+
+        For assets without a DVOL index (SOL, XRP, AVAX, TRX), we fetch
+        the nearest-expiry options chain and extract the ATM IV.
+
+        Args:
+            currency: Cryptocurrency (e.g., "SOL")
+            current_price: Current spot price for finding ATM strike
+
+        Returns:
+            ATM implied volatility as decimal, or None if unavailable
+        """
+        if currency in self.NO_DERIBIT_COVERAGE:
+            return None
+
+        # If DVOL is available, prefer that (more reliable)
+        if currency in self.DVOL_SUPPORTED:
+            return await self.fetch_deribit_dvol(currency)
+
+        try:
+            async with httpx.AsyncClient() as client:
+                # Get available instruments to find nearest expiry
+                url = f"{self.deribit_api}/public/get_instruments"
+                params = {
+                    "currency": currency,
+                    "kind": "option",
+                    "expired": "false",
+                }
+                response = await client.get(url, params=params, timeout=10.0)
+                response.raise_for_status()
+                data = response.json()
+
+                instruments = data.get("result", [])
+                if not instruments:
+                    print(f"⚠️  No Deribit options found for {currency}")
+                    return None
+
+                # Find nearest expiry call options close to ATM
+                now_ms = int(datetime.now().timestamp() * 1000)
+                best_instrument = None
+                best_distance = float("inf")
+
+                for inst in instruments:
+                    if inst.get("option_type") != "call":
+                        continue
+                    strike = inst.get("strike")
+                    expiry = inst.get("expiration_timestamp", 0)
+                    if not strike or expiry <= now_ms:
+                        continue
+
+                    # Prefer nearest expiry that's at least 1 day out
+                    time_to_expiry_ms = expiry - now_ms
+                    if time_to_expiry_ms < 86400000:  # Skip < 1 day
+                        continue
+
+                    # Find closest to ATM
+                    strike_distance = abs(strike - current_price) / current_price
+                    # Weight: prefer close-to-ATM and near-term
+                    distance = strike_distance + (time_to_expiry_ms / 1e12)
+
+                    if distance < best_distance:
+                        best_distance = distance
+                        best_instrument = inst
+
+                if not best_instrument:
+                    print(f"⚠️  No suitable ATM option found for {currency}")
+                    return None
+
+                instrument_name = best_instrument["instrument_name"]
+
+                # Fetch the order book / ticker to get mark IV
+                ticker_url = f"{self.deribit_api}/public/ticker"
+                ticker_params = {"instrument_name": instrument_name}
+                ticker_response = await client.get(
+                    ticker_url, params=ticker_params, timeout=10.0
+                )
+                ticker_response.raise_for_status()
+                ticker_data = ticker_response.json()
+
+                result = ticker_data.get("result", {})
+                mark_iv = result.get("mark_iv")
+
+                if mark_iv is not None:
+                    # mark_iv is in percentage (e.g., 68.5 = 68.5%)
+                    iv = float(mark_iv) / 100.0
+                    print(
+                        f"✓ Deribit {currency} ATM IV: {iv:.1%} "
+                        f"(from {instrument_name})"
+                    )
+                    return iv
+
+                print(f"⚠️  No mark IV in Deribit ticker for {instrument_name}")
+                return None
+
+        except Exception as e:
+            print(f"⚠️  Failed to fetch Deribit options IV for {currency}: {e}")
+            return None
+
+    async def fetch_iv_for_asset(
+        self, currency: str, current_price: float | None = None
+    ) -> tuple[float | None, str]:
+        """
+        Fetch the best available implied volatility for any asset.
+
+        Returns:
+            Tuple of (iv_value, source_label) where source is one of:
+            "dvol", "options_chain", "none"
+        """
+        currency_upper = currency.upper()
+
+        if currency_upper in self.DVOL_SUPPORTED:
+            iv = await self.fetch_deribit_dvol(currency_upper)
+            if iv is not None:
+                return iv, "dvol"
+
+        if currency_upper in self.OPTIONS_CHAIN_SUPPORTED and current_price:
+            iv = await self.fetch_deribit_options_iv(currency_upper, current_price)
+            if iv is not None:
+                return iv, "options_chain"
+
+        return None, "none"
+
     def calculate_binary_option_probability(
         self,
         current_price: float,
@@ -578,6 +713,7 @@ class VolatilityRegime:
         candles: list[dict[str, Any]],
         contracts: list[dict[str, Any]],
         current_price: float,
+        currency: str = "BTC",
     ) -> dict[str, Any]:
         """
         Complete volatility analysis with dual IV sources for mispricing detection.
@@ -585,7 +721,7 @@ class VolatilityRegime:
         Uses Yang-Zhang as primary estimator (14x more efficient than Parkinson).
 
         Compares:
-        - Deribit DVOL (professional options market IV)
+        - Deribit IV (professional options market — DVOL index or ATM options chain)
         - Kalshi IV (prediction market IV from binary options)
 
         Divergence between the two can signal arbitrage opportunities.
@@ -593,7 +729,8 @@ class VolatilityRegime:
         Args:
             candles: Historical price candles
             contracts: Kalshi contracts for IV calculation
-            current_price: Current BTC spot price
+            current_price: Current spot price
+            currency: Asset currency (BTC, ETH, SOL, XRP, etc.)
 
         Returns:
             Comprehensive volatility metrics including mispricing detection
@@ -609,8 +746,8 @@ class VolatilityRegime:
         # Get HAR-RV volatility forecast
         har_rv_forecast = self.calculate_har_rv_forecast(candles)
 
-        # Fetch Deribit DVOL (market IV from options market)
-        deribit_iv = await self.fetch_deribit_dvol("BTC")
+        # Fetch Deribit IV — uses DVOL index for BTC/ETH, options chain for SOL/XRP
+        deribit_iv, iv_source = await self.fetch_iv_for_asset(currency, current_price)
 
         # Calculate Kalshi IV (prediction market IV)
         kalshi_iv = self.calculate_implied_volatility(contracts, current_price)
@@ -638,6 +775,7 @@ class VolatilityRegime:
             "realized_vol_yang_zhang": rv_yang_zhang,
             "implied_vol": primary_iv,  # Primary IV used for regime detection
             "deribit_iv": deribit_iv,  # Options market IV
+            "deribit_iv_source": iv_source,  # "dvol", "options_chain", or "none"
             "kalshi_iv": kalshi_iv,  # Prediction market IV
             "regime": regime,
             "vol_premium": vol_premium["premium_absolute"],

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import multiAssetSSEManager from '@/lib/sse-multi-asset-manager';
 import exchangeAPI from '@/lib/exchange-api';
-import { useMultiAssetStore, type Asset } from '@/lib/stores/multi-asset-store';
+import { useMultiAssetStore, type Asset, type Timeframe } from '@/lib/stores/multi-asset-store';
 
 /**
  * React hook for consuming real-time multi-asset trading data via SSE
@@ -53,6 +53,7 @@ export function useRealtimeData(options: UseRealtimeDataOptions = {}) {
   } = options;
 
   const selectedAsset = useMultiAssetStore((state) => state.selectedAsset);
+  const selectedTimeframe = useMultiAssetStore((state) => state.selectedTimeframe);
 
   useEffect(() => {
     if (!autoConnect) {
@@ -96,6 +97,16 @@ export function useRealtimeData(options: UseRealtimeDataOptions = {}) {
       exchangeAPI.startPolling();
     }
   }, [selectedAsset, autoConnect]);
+
+  // Watch for timeframe changes and reconnect
+  useEffect(() => {
+    if (!autoConnect) return;
+
+    console.log(`[useRealtimeData] Timeframe changed to ${selectedTimeframe}`);
+    // Force reconnect to get new contract data for the selected timeframe
+    multiAssetSSEManager.disconnectAsset(selectedAsset);
+    multiAssetSSEManager.connectAsset(selectedAsset);
+  }, [selectedTimeframe, autoConnect]);
 
   return {
     /**

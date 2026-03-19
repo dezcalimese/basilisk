@@ -15,7 +15,7 @@ function DisabledWalletButton() {
   return (
     <button
       disabled
-      className="flex items-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl bg-muted/50 text-muted-foreground font-semibold text-sm cursor-not-allowed"
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 text-muted-foreground font-medium text-xs cursor-not-allowed"
       title="Wallet connection not configured"
       aria-label="Connect wallet (not configured)"
     >
@@ -161,8 +161,8 @@ function ActiveWalletButton() {
       <button
         onClick={login}
         className={cn(
-          "wallet-btn-connect flex items-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl",
-          "bg-gradient-to-r from-[#176a91] to-[#1E81B0] text-white font-semibold text-sm",
+          "wallet-btn-connect flex items-center gap-1.5 px-3 py-1.5 rounded-lg",
+          "bg-gradient-to-r from-[#176a91] to-[#1E81B0] text-white font-medium text-xs",
           "shadow-lg shadow-[#1E81B0]/25",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
           "active:scale-[0.98]"
@@ -181,7 +181,7 @@ function ActiveWalletButton() {
       <button
         onClick={() => setDropdownOpen(!dropdownOpen)}
         className={cn(
-          "wallet-btn-connected flex items-center gap-3 px-4 py-2.5 min-h-[44px] rounded-xl border",
+          "wallet-btn-connected flex items-center gap-2 px-3 py-1.5 rounded-lg border",
           "bg-muted/50 border-border/50",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
           dropdownOpen && "bg-muted border-primary/30"

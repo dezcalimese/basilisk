@@ -29,7 +29,7 @@ type TabType = "buy" | "sell";
 export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
   const { login } = usePrivy();
   const { wallet, balance, isAuthenticated } = useAuthStore();
-  const { state, isReady, getQuote, executeTrade, reset } = useTradeExecution();
+  const { state, isReady, getOrder, executeTrade, reset } = useTradeExecution();
 
   const [tab, setTab] = useState<TabType>("buy");
   const [selectedSide, setSelectedSide] = useState<"yes" | "no">("yes");
@@ -119,7 +119,7 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
       return;
     }
 
-    await getQuote({
+    await getOrder({
       ticker: signal.ticker,
       direction: selectedSide,
       action: tab,
@@ -130,8 +130,8 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
   };
 
   const handleExecuteTrade = async () => {
-    if (!state.quote) return;
-    const success = await executeTrade(state.quote);
+    if (!state.order) return;
+    const success = await executeTrade(state.order);
     if (success) {
       // Close modal after short delay to show success state
       setTimeout(onClose, 2000);
@@ -144,7 +144,7 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
       return;
     }
 
-    if (state.step === "confirming" && state.quote) {
+    if (state.step === "confirming" && state.order) {
       handleExecuteTrade();
     } else {
       handleGetQuote();
@@ -153,7 +153,7 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
 
   const getStepLabel = (step: TradeStep): string => {
     switch (step) {
-      case "getting-quote":
+      case "getting-order":
         return "Getting Quote...";
       case "confirming":
         return "Confirm Trade";
@@ -172,7 +172,7 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
     }
   };
 
-  const isProcessing = ["getting-quote", "signing", "submitting", "polling"].includes(state.step);
+  const isProcessing = ["getting-order", "signing", "submitting", "polling"].includes(state.step);
   const canSubmit =
     quantity &&
     (orderMode !== "limit" || limitPrice) &&
@@ -419,42 +419,40 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
               </div>
             )}
 
-            {/* Quote Display */}
-            {state.quote && state.step === "confirming" && (
+            {/* Order Confirmation Display */}
+            {state.order && state.step === "confirming" && (
               <div className="p-4 bg-primary/10 rounded-xl border border-primary/20 space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Price per contract</span>
+                  <span className="text-muted-foreground">You pay</span>
                   <span className="font-semibold font-tabular-nums">
-                    {formatCentsPrice(Math.round(state.quote.price * 100))}
+                    ${(parseInt(state.order.inAmount) / 1_000_000).toFixed(2)}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Contracts</span>
-                  <span className="font-semibold font-tabular-nums">{state.quote.outputAmount}</span>
+                  <span className="text-muted-foreground">You receive</span>
+                  <span className="font-semibold font-tabular-nums">
+                    {(parseInt(state.order.outAmount) / 1_000_000).toFixed(4)} tokens
+                  </span>
                 </div>
-                {state.quote.priceImpact > 0.1 && (
+                {state.order.priceImpactPct && parseFloat(state.order.priceImpactPct) > 0.1 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Price impact</span>
                     <span className="font-semibold font-tabular-nums text-amber-500">
-                      {state.quote.priceImpact.toFixed(2)}%
+                      {parseFloat(state.order.priceImpactPct).toFixed(2)}%
                     </span>
                   </div>
                 )}
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Fee</span>
-                  <span className="font-semibold font-tabular-nums">${state.quote.fee.toFixed(2)}</span>
-                </div>
                 <div className="pt-2 border-t border-primary/20 flex justify-between">
-                  <span className="text-[#4AADD8] font-medium">Total cost</span>
-                  <span className="font-bold text-lg font-tabular-nums">
-                    ${(state.quote.inputAmount / 1_000_000).toFixed(2)}
+                  <span className="text-[#4AADD8] font-medium">Execution</span>
+                  <span className="font-semibold font-tabular-nums text-sm">
+                    {state.order.executionMode === "async" ? "Async (fills in ~2-10s)" : "Atomic"}
                   </span>
                 </div>
               </div>
             )}
 
             {/* Cost Summary (before quote) */}
-            {quantity && !state.quote && (
+            {quantity && !state.order && (
               <div className="p-4 bg-muted/30 rounded-xl border border-border/50 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Estimated cost</span>
@@ -493,13 +491,13 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
               </div>
             </div>
 
-            {/* No mints warning */}
+            {/* No mints info — trading still available via DFlow */}
             {!hasMints && (
-              <div className="p-4 bg-amber-500/10 rounded-xl border border-amber-500/20" role="alert">
-                <div className="flex items-center gap-3 text-amber-400 text-sm">
-                  <i className="icon-[lucide--alert-triangle] h-5 w-5 flex-shrink-0" aria-hidden="true" />
+              <div className="p-4 bg-primary/10 rounded-xl border border-primary/20" role="status">
+                <div className="flex items-center gap-3 text-primary text-sm">
+                  <i className="icon-[lucide--info] h-5 w-5 flex-shrink-0" aria-hidden="true" />
                   <span>
-                    This market is not yet available for on-chain trading
+                    Trade via DFlow on Solana. Connect wallet to get started.
                   </span>
                 </div>
               </div>
@@ -536,11 +534,9 @@ export function TradeModal({ signal, isOpen, onClose }: TradeModalProps) {
                   <div>
                     <p className="font-medium">Trade Complete!</p>
                     <p className="text-muted-foreground">
-                      Filled <span className="font-tabular-nums">{state.orderStatus.filledAmount}</span> contracts
-                      {state.orderStatus.averagePrice &&
-                        ` at ${formatCentsPrice(
-                          Math.round(state.orderStatus.averagePrice * 100)
-                        )}`}
+                      {state.orderStatus.fills.length > 0
+                        ? `${state.orderStatus.fills.length} fill(s) completed`
+                        : "Order closed"}
                     </p>
                   </div>
                 </div>

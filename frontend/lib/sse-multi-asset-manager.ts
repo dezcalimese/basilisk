@@ -10,7 +10,7 @@
  * while maintaining instant switching for recently-viewed assets.
  */
 
-import { useMultiAssetStore, type Asset } from './stores/multi-asset-store';
+import { useMultiAssetStore, type Asset, type Timeframe } from './stores/multi-asset-store';
 
 interface AssetConnection {
   eventSource: EventSource;
@@ -61,7 +61,8 @@ class MultiAssetSSEManager {
     useMultiAssetStore.getState().setConnectionState(asset, 'connecting');
 
     try {
-      const url = `${this.baseUrl}/api/v1/stream/${asset.toLowerCase()}`;
+      const timeframe = useMultiAssetStore.getState().selectedTimeframe;
+      const url = `${this.baseUrl}/api/v1/stream/${asset.toLowerCase()}?timeframe=${timeframe}`;
       const eventSource = new EventSource(url);
 
       const connection: AssetConnection = {
@@ -176,6 +177,39 @@ class MultiAssetSSEManager {
         markDataReceived();
       } catch (err) {
         console.error(`[SSE Multi] Error parsing ${asset} contracts:`, err);
+      }
+    });
+
+    // Real-time ticker updates from Kalshi WebSocket (contract prices)
+    es.addEventListener('ticker_update', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        // Ticker updates provide real-time yes/no prices for individual contracts
+        // These can be used to update signal prices between full contract refreshes
+        markDataReceived();
+      } catch (err) {
+        console.error(`[SSE Multi] Error parsing ${asset} ticker:`, err);
+      }
+    });
+
+    // Real-time orderbook updates from Kalshi WebSocket
+    es.addEventListener('orderbook_update', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        const { ticker, yes_bids, no_bids } = data;
+        // Update orderbook in store for the active ticker
+        const bestYesBid = yes_bids?.[0]?.[0] / 100 || 0;
+        const bestNoBid = no_bids?.[0]?.[0] / 100 || 0;
+        useMultiAssetStore.getState().setOrderBook(asset, {
+          yesBid: bestYesBid,
+          yesAsk: bestNoBid > 0 ? 1 - bestNoBid : 1,
+          noBid: bestNoBid,
+          noAsk: bestYesBid > 0 ? 1 - bestYesBid : 1,
+          timestamp: Date.now(),
+        });
+        markDataReceived();
+      } catch (err) {
+        console.error(`[SSE Multi] Error parsing ${asset} orderbook:`, err);
       }
     });
   }

@@ -106,6 +106,18 @@ async def fetch_from_ccxt(asset: str, interval: str, limit: int) -> List[Any]:
             {"id": "bitfinex", "symbol": "SOL/USD"},
             {"id": "bybit", "symbol": "SOL/USDT"},
         ],
+        "DOGE": [
+            {"id": "kraken", "symbol": "DOGE/USD"},
+            {"id": "coinbase", "symbol": "DOGE/USD"},
+            {"id": "bybit", "symbol": "DOGE/USDT"},
+        ],
+        "HYPE": [
+            {"id": "bybit", "symbol": "HYPE/USDT"},
+        ],
+        "BNB": [
+            {"id": "bybit", "symbol": "BNB/USDT"},
+            {"id": "bitfinex", "symbol": "BNB/USD"},
+        ],
     }
 
     exchanges_to_try = ASSET_EXCHANGES.get(asset.upper(), ASSET_EXCHANGES["BTC"])
@@ -259,3 +271,30 @@ async def get_sol_candles(
         List of candles in format: [timestamp, open, high, low, close, volume]
     """
     return await _get_candles("SOL", interval, limit)
+
+
+@router.get("/candles/dogeusd")
+async def get_doge_candles(
+    interval: str = Query(default="1m", description="Candle interval"),
+    limit: int = Query(default=500, ge=1, le=1500, description="Number of candles"),
+) -> List[Any]:
+    """Fetch DOGE/USD candlestick data."""
+    return await _get_candles("DOGE", interval, limit)
+
+
+@router.get("/candles/hypeusd")
+async def get_hype_candles(
+    interval: str = Query(default="1m", description="Candle interval"),
+    limit: int = Query(default=500, ge=1, le=1500, description="Number of candles"),
+) -> List[Any]:
+    """Fetch HYPE/USD candlestick data."""
+    return await _get_candles("HYPE", interval, limit)
+
+
+@router.get("/candles/bnbusd")
+async def get_bnb_candles(
+    interval: str = Query(default="1m", description="Candle interval"),
+    limit: int = Query(default=500, ge=1, le=1500, description="Number of candles"),
+) -> List[Any]:
+    """Fetch BNB/USD candlestick data."""
+    return await _get_candles("BNB", interval, limit)

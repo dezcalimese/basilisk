@@ -43,7 +43,7 @@ export interface HealthResponse {
 
 export interface ExecuteTradeRequest {
   ticker: string;
-  asset: "BTC" | "ETH" | "XRP";
+  asset: "BTC" | "ETH" | "XRP" | "SOL" | "DOGE" | "HYPE" | "BNB";
   direction: "YES" | "NO";
   strike: number;
   contracts: number;

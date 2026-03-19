@@ -22,7 +22,7 @@ class ExchangeAPIClient {
   private pollTimer: NodeJS.Timeout | null = null;
   private isPolling = false;
   private interval = '1m'; // 1 minute candles
-  private lastCandleTimestamp: Record<Asset, number> = { BTC: 0, ETH: 0, XRP: 0, SOL: 0 };
+  private lastCandleTimestamp: Record<Asset, number> = { BTC: 0, ETH: 0, XRP: 0, SOL: 0, DOGE: 0, HYPE: 0, BNB: 0 };
   private consecutiveErrors = 0;
   private maxRetries = 5; // Increased retries
   private baseUrl: string;
@@ -48,10 +48,10 @@ class ExchangeAPIClient {
     // Fetch immediately
     this.fetchCandles();
 
-    // Then poll every 10 seconds
+    // Poll every 30 seconds (backend caches for 30s anyway)
     this.pollTimer = setInterval(() => {
       this.fetchCandles();
-    }, 10000);
+    }, 30000);
   }
 
   /**
@@ -60,7 +60,7 @@ class ExchangeAPIClient {
   private async fetchCandles(): Promise<void> {
     const store = useMultiAssetStore.getState();
     const asset = store.selectedAsset;
-    const symbolMap: Record<Asset, string> = { BTC: 'btcusd', ETH: 'ethusd', XRP: 'xrpusd', SOL: 'solusd' };
+    const symbolMap: Record<Asset, string> = { BTC: 'btcusd', ETH: 'ethusd', XRP: 'xrpusd', SOL: 'solusd', DOGE: 'dogeusd', HYPE: 'hypeusd', BNB: 'bnbusd' };
     const symbol = symbolMap[asset];
 
     // Force full refetch when asset changes
@@ -72,7 +72,7 @@ class ExchangeAPIClient {
     }
 
     try {
-      const url = `${this.baseUrl}/api/v1/candles/${symbol}?interval=${this.interval}&limit=1440`;
+      const url = `${this.baseUrl}/api/v1/candles/${symbol}?interval=${this.interval}&limit=500`;
 
       // Use fetchWithRetry for reliability
       const candles = await fetchWithRetry<any[]>(url, {

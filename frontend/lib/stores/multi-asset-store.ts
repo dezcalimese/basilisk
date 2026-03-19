@@ -9,7 +9,8 @@ import type { TradeSignal } from '@/lib/api';
  * - Supports on-demand streaming (connect only to selected assets)
  */
 
-export type Asset = 'BTC' | 'ETH' | 'XRP' | 'SOL';
+export type Asset = 'BTC' | 'ETH' | 'XRP' | 'SOL' | 'DOGE' | 'HYPE' | 'BNB';
+export type Timeframe = 'hourly' | '15m';
 
 export interface CandleData {
   timestamp: number;
@@ -35,6 +36,7 @@ export interface VolatilityData {
   realized_vol: number;
   implied_vol: number;
   deribit_iv?: number;
+  deribit_iv_source?: "dvol" | "options_chain" | "none";
   kalshi_iv?: number;
   regime: string;
   vol_premium: number;
@@ -91,16 +93,18 @@ interface AssetConnectionState {
 }
 
 interface MultiAssetState {
-  // Selected asset
+  // Selected asset and timeframe
   selectedAsset: Asset;
+  selectedTimeframe: Timeframe;
 
   // Per-asset data (stored in objects for O(1) access)
   assetData: Record<Asset, AssetRealtimeData>;
   assetAnalytics: Record<Asset, AssetAnalyticalData>;
   assetConnections: Record<Asset, AssetConnectionState>;
 
-  // Asset selection
+  // Asset and timeframe selection
   selectAsset: (asset: Asset) => void;
+  selectTimeframe: (timeframe: Timeframe) => void;
 
   // Asset-scoped getters (return data for current selected asset)
   getCurrentPrice: () => number;
@@ -151,23 +155,33 @@ const createInitialConnection = (): AssetConnectionState => ({
 
 const initialState = {
   selectedAsset: 'BTC' as Asset,
+  selectedTimeframe: 'hourly' as Timeframe,
   assetData: {
     BTC: createInitialAssetData(),
     ETH: createInitialAssetData(),
     XRP: createInitialAssetData(),
     SOL: createInitialAssetData(),
+    DOGE: createInitialAssetData(),
+    HYPE: createInitialAssetData(),
+    BNB: createInitialAssetData(),
   },
   assetAnalytics: {
     BTC: createInitialAnalytics(),
     ETH: createInitialAnalytics(),
     XRP: createInitialAnalytics(),
     SOL: createInitialAnalytics(),
+    DOGE: createInitialAnalytics(),
+    HYPE: createInitialAnalytics(),
+    BNB: createInitialAnalytics(),
   },
   assetConnections: {
     BTC: createInitialConnection(),
     ETH: createInitialConnection(),
     XRP: createInitialConnection(),
     SOL: createInitialConnection(),
+    DOGE: createInitialConnection(),
+    HYPE: createInitialConnection(),
+    BNB: createInitialConnection(),
   },
 };
 
@@ -175,6 +189,7 @@ export const useMultiAssetStore = create<MultiAssetState>((set, get) => ({
   ...initialState,
 
   selectAsset: (asset: Asset) => set({ selectedAsset: asset }),
+  selectTimeframe: (timeframe: Timeframe) => set({ selectedTimeframe: timeframe }),
 
   // Getters (return data for selected asset)
   getCurrentPrice: () => {

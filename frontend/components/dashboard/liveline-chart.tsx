@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { Liveline } from "liveline";
-import type { CandlePoint, LivelinePoint, OrderbookData } from "liveline";
+import type { CandlePoint, LivelinePoint } from "liveline";
 import { useRealtimeStore, useMultiAssetStore, useAnalyticalStore } from "@/lib/stores/multi-asset-store";
 import { AnimatedPrice } from "@/components/dashboard/animated-price";
 import type { TradeSignal } from "@/lib/api";
@@ -13,8 +13,8 @@ interface LivelineChartProps {
 }
 
 export function LivelineChart({ signals = [] }: LivelineChartProps) {
-  const [chartMode, setChartMode] = useState<"line" | "candle">("candle");
-  const [lineMode, setLineMode] = useState(false);
+  const [chartMode, setChartMode] = useState<"line" | "candle">("line");
+  const [lineMode, setLineMode] = useState(true);
   const [mounted, setMounted] = useState(false);
   const { resolvedTheme } = useTheme();
 
@@ -23,6 +23,7 @@ export function LivelineChart({ signals = [] }: LivelineChartProps) {
   }, []);
 
   const selectedAsset = useMultiAssetStore((state) => state.selectedAsset);
+  const selectedTimeframe = useMultiAssetStore((state) => state.selectedTimeframe);
   const connectionState = useRealtimeStore().connectionState;
   const { candles, lastCandle, currentPrice: sseCurrentPrice } = useRealtimeStore();
   const volatility = useAnalyticalStore().volatility;
@@ -92,56 +93,20 @@ export function LivelineChart({ signals = [] }: LivelineChartProps) {
     return best;
   }, [signals]);
 
-  // Map strike prices to orderbook-style floating labels
-  // Bids = BUY signals (below current price), Asks = SELL/above signals
-  const strikeOrderbook: OrderbookData | undefined = useMemo(() => {
-    const activeSignals = signals.filter(
-      (s) => s.is_active && s.strike_price != null && s.expiry_time
-    );
-    if (activeSignals.length === 0) return undefined;
-
-    // Get nearest expiry only
-    const nearestExpiry = activeSignals.reduce((nearest, signal) => {
-      const signalExpiry = new Date(signal.expiry_time!).getTime();
-      const nearestTime = nearest ? new Date(nearest.expiry_time!).getTime() : Infinity;
-      return signalExpiry < nearestTime ? signal : nearest;
-    }, activeSignals[0]);
-
-    const nearestExpiryTime = nearestExpiry.expiry_time;
-    const nearestExpirySignals = activeSignals.filter(
-      (s) => s.expiry_time === nearestExpiryTime
-    );
-
-    const bids: [number, number][] = [];
-    const asks: [number, number][] = [];
-
-    nearestExpirySignals.forEach((signal) => {
-      const price = signal.strike_price!;
-      // Use EV as the "size" so brighter = higher EV
-      const size = Math.max(1, Math.abs(signal.expected_value) * 100);
-
-      if (signal.signal_type.includes("BUY") || price < currentPrice) {
-        bids.push([price, size]);
-      } else {
-        asks.push([price, size]);
-      }
-    });
-
-    // Sort bids descending, asks ascending
-    bids.sort((a, b) => b[0] - a[0]);
-    asks.sort((a, b) => a[0] - b[0]);
-
-    return bids.length > 0 || asks.length > 0 ? { bids, asks } : undefined;
-  }, [signals, currentPrice]);
+  // Strike orderbook overlay removed — EV values were being displayed as
+  // dollar amounts ($51 etc.) which was confusing. The reference line
+  // already marks the best strike clearly.
 
   // Reference line for the best strike
   const referenceLine = useMemo(() => {
     if (!bestStrike?.strike_price) return undefined;
-    const strikeK = bestStrike.strike_price / 1000;
     const ev = (bestStrike.expected_value * 100).toFixed(0);
+    const strikeFormatted = bestStrike.strike_price >= 1000
+      ? `$${(bestStrike.strike_price / 1000).toFixed(1)}k`
+      : `$${bestStrike.strike_price.toLocaleString()}`;
     return {
       value: bestStrike.strike_price,
-      label: `$${strikeK.toFixed(0)}k Strike (${ev}% EV)`,
+      label: `${strikeFormatted} Strike (${ev}% EV)`,
     };
   }, [bestStrike]);
 
@@ -164,6 +129,8 @@ export function LivelineChart({ signals = [] }: LivelineChartProps) {
     if (m > 0) return `${m}m ${s}s`;
     return `${s}s`;
   }, [signals, currentTime]);
+
+  // No overlay series — chart shows the primary price line only
 
   // Determine if volatile regime for degen mode
   const isDegen = volatility?.regime === "CRISIS" || volatility?.regime === "HIGH";
@@ -196,7 +163,9 @@ export function LivelineChart({ signals = [] }: LivelineChartProps) {
           <div className="flex items-center gap-1.5 text-xs">
             <span className="text-muted-foreground font-bold">Best Strike:</span>
             <span className="text-primary font-medium">
-              ${(bestStrike.strike_price! / 1000).toFixed(0)}k
+              {bestStrike.strike_price! >= 1000
+                ? `$${(bestStrike.strike_price! / 1000).toFixed(1)}k`
+                : `$${bestStrike.strike_price!.toLocaleString()}`}
             </span>
             <span className={bestStrike.expected_value >= 0 ? "text-green-500" : "text-red-500"}>
               {(bestStrike.expected_value * 100).toFixed(1)}% EV
@@ -208,6 +177,7 @@ export function LivelineChart({ signals = [] }: LivelineChartProps) {
       {/* Chart container - Liveline fills its parent */}
       <div className="flex-1 min-h-0">
         {mounted && <Liveline
+          key={`${selectedAsset}-${selectedTimeframe}`}
           // Data
           data={lineData}
           value={currentPrice}
@@ -220,14 +190,16 @@ export function LivelineChart({ signals = [] }: LivelineChartProps) {
           lineValue={currentPrice}
           onModeChange={(mode) => {
             if (mode === "line") {
+              setChartMode("line");
               setLineMode(true);
             } else {
+              setChartMode("candle");
               setLineMode(false);
             }
           }}
           // Appearance
           theme={resolvedTheme === "light" ? "light" : "dark"}
-          color="#06b6d4"
+          color="#2dd4bf"
           grid
           badge
           fill
@@ -235,27 +207,38 @@ export function LivelineChart({ signals = [] }: LivelineChartProps) {
           // Features
           momentum
           scrub
-          showValue
           valueMomentumColor
           degen={isDegen ? { scale: 1.5 } : false}
           exaggerate={false}
           badgeVariant="minimal"
+          badgeTail
+          tooltipOutline
           // State
           loading={isLoading}
           paused={connectionState === "error"}
           emptyText={`Waiting for ${selectedAsset} data...`}
-          // Time windows
-          windows={[
-            { label: "5m", secs: 300 },
-            { label: "15m", secs: 900 },
-            { label: "1h", secs: 3600 },
-            { label: "3h", secs: 10800 },
-            { label: "1d", secs: 86400 },
-          ]}
+          // Time windows — order matters, first item is fallback default
+          window={selectedTimeframe === "15m" ? 900 : 3600}
+          windows={
+            selectedTimeframe === "15m"
+              ? [
+                  { label: "15m", secs: 900 },
+                  { label: "5m", secs: 300 },
+                  { label: "1h", secs: 3600 },
+                  { label: "3h", secs: 10800 },
+                  { label: "1d", secs: 86400 },
+                ]
+              : [
+                  { label: "1h", secs: 3600 },
+                  { label: "5m", secs: 300 },
+                  { label: "15m", secs: 900 },
+                  { label: "3h", secs: 10800 },
+                  { label: "1d", secs: 86400 },
+                ]
+          }
           windowStyle="rounded"
-          // Strike prices
+          // Strike price reference line
           referenceLine={referenceLine}
-          orderbook={strikeOrderbook}
           // Formatting
           formatValue={formatValue}
           // Layout

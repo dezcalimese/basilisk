@@ -8,7 +8,9 @@ from app.services.volatility_skew import VolatilitySkew
 from app.services.market_service import MarketService
 from app.data.bitcoin_client import BitcoinPriceClient
 from app.data.ethereum_client import EthereumPriceClient
+from app.data.generic_price_client import GenericPriceClient
 from app.data.ripple_client import RipplePriceClient
+from app.data.solana_client import SolanaPriceClient
 
 router = APIRouter()
 
@@ -22,8 +24,12 @@ def get_price_client(asset: str):
         return EthereumPriceClient()
     elif asset_upper == "XRP":
         return RipplePriceClient()
+    elif asset_upper == "SOL":
+        return SolanaPriceClient()
+    elif asset_upper in ("DOGE", "HYPE", "BNB"):
+        return GenericPriceClient(asset_upper)
     else:
-        raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}. Supported: BTC, ETH, XRP")
+        raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}")
 
 
 @router.get("/statistics/hourly-movements")
@@ -152,6 +158,10 @@ async def get_volatility_skew(
             market_data = await market_service.get_ethereum_hourly_contracts()
         elif asset_upper == "XRP":
             market_data = await market_service.get_ripple_hourly_contracts()
+        elif asset_upper == "SOL":
+            market_data = await market_service.get_solana_hourly_contracts()
+        elif asset_upper in ("DOGE", "HYPE", "BNB"):
+            market_data = await market_service.get_generic_hourly_contracts(asset_upper)
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}")
 
@@ -265,6 +275,10 @@ async def get_statistics_summary(
             market_data = await market_service.get_ethereum_hourly_contracts()
         elif asset_upper == "XRP":
             market_data = await market_service.get_ripple_hourly_contracts()
+        elif asset_upper == "SOL":
+            market_data = await market_service.get_solana_hourly_contracts()
+        elif asset_upper in ("DOGE", "HYPE", "BNB"):
+            market_data = await market_service.get_generic_hourly_contracts(asset_upper)
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported asset: {asset}")
 

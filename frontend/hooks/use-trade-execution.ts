@@ -7,14 +7,17 @@ import {
   dflowClient,
   USDC_MINT,
   usdcToUnits,
-  type DFlowQuote,
-  type OrderStatus,
+  isMaintenanceWindow,
+  type DFlowOrderResponse,
+  type OrderStatusResponse,
 } from "@/lib/dflow/client";
 import { useAuthStore } from "@/lib/stores/auth-store";
+import { checkGeoRestriction } from "@/lib/geoblocking";
 
 export type TradeStep =
   | "idle"
-  | "getting-quote"
+  | "verifying"
+  | "getting-order"
   | "confirming"
   | "signing"
   | "submitting"
@@ -32,14 +35,13 @@ export type TradeParams = {
   amount: number; // In USD
   yesMint: string;
   noMint: string;
-  slippageBps?: number;
+  slippageBps?: number | "auto";
 };
 
 export type TradeState = {
   step: TradeStep;
-  quote: DFlowQuote | null;
-  orderId: string | null;
-  orderStatus: OrderStatus | null;
+  order: DFlowOrderResponse | null;
+  orderStatus: OrderStatusResponse | null;
   txSignature: string | null;
   error: string | null;
 };
@@ -54,8 +56,7 @@ export function useTradeExecution() {
 
   const [state, setState] = useState<TradeState>({
     step: "idle",
-    quote: null,
-    orderId: null,
+    order: null,
     orderStatus: null,
     txSignature: null,
     error: null,
@@ -64,8 +65,7 @@ export function useTradeExecution() {
   const reset = useCallback(() => {
     setState({
       step: "idle",
-      quote: null,
-      orderId: null,
+      order: null,
       orderStatus: null,
       txSignature: null,
       error: null,
@@ -77,56 +77,87 @@ export function useTradeExecution() {
   }, []);
 
   /**
-   * Get a quote for a trade
+   * Get a trade order (quote + transaction in one call)
    */
-  const getQuote = useCallback(
-    async (params: TradeParams): Promise<DFlowQuote | null> => {
+  const getOrder = useCallback(
+    async (params: TradeParams): Promise<DFlowOrderResponse | null> => {
       if (!isAuthenticated || !wallet) {
         setError("Please connect your wallet first");
         return null;
       }
 
+      // Check geoblocking
+      const geo = await checkGeoRestriction();
+      if (!geo.allowed) {
+        setError(
+          `Trading is not available in ${geo.countryName || "your region"} due to regulatory restrictions.`
+        );
+        return null;
+      }
+
+      // Check maintenance window
+      if (isMaintenanceWindow()) {
+        setError(
+          "Kalshi maintenance window (Thu 3-5am ET). Orders will be reverted. Please try again later."
+        );
+        return null;
+      }
+
+      // Verify KYC for buys
+      if (params.action === "buy") {
+        setState((prev) => ({ ...prev, step: "verifying", error: null }));
+        try {
+          const verified = await dflowClient.verifyWallet(wallet.address);
+          if (!verified) {
+            setError(
+              "Wallet not verified. Please complete Proof KYC verification before trading."
+            );
+            return null;
+          }
+        } catch {
+          // KYC check failed but don't block — DFlow will reject at order time
+        }
+      }
+
       setState((prev) => ({
         ...prev,
-        step: "getting-quote",
+        step: "getting-order",
         error: null,
       }));
 
       try {
-        // Determine input/output mints based on action and direction
+        // Determine input/output mints
         let inputMint: string;
         let outputMint: string;
 
         if (params.action === "buy") {
-          // Buying YES/NO tokens with USDC
           inputMint = USDC_MINT;
           outputMint =
             params.direction === "yes" ? params.yesMint : params.noMint;
         } else {
-          // Selling YES/NO tokens for USDC
           inputMint =
             params.direction === "yes" ? params.yesMint : params.noMint;
           outputMint = USDC_MINT;
         }
 
-        const quote = await dflowClient.getQuote({
+        const order = await dflowClient.getOrder({
           inputMint,
           outputMint,
           amount: usdcToUnits(params.amount),
-          side: params.action,
-          slippageBps: params.slippageBps ?? 50,
+          userWallet: wallet.address,
+          slippageBps: params.slippageBps ?? "auto",
         });
 
         setState((prev) => ({
           ...prev,
           step: "confirming",
-          quote,
+          order,
         }));
 
-        return quote;
+        return order;
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "Failed to get quote";
+          err instanceof Error ? err.message : "Failed to get order";
         setError(message);
         return null;
       }
@@ -135,12 +166,17 @@ export function useTradeExecution() {
   );
 
   /**
-   * Execute a trade after getting a quote
+   * Execute a trade by signing and submitting the transaction
    */
   const executeTrade = useCallback(
-    async (quote: DFlowQuote): Promise<boolean> => {
+    async (order: DFlowOrderResponse): Promise<boolean> => {
       if (!wallet) {
         setError("Wallet not connected");
+        return false;
+      }
+
+      if (!order.transaction) {
+        setError("No transaction to sign — order was quote-only");
         return false;
       }
 
@@ -153,68 +189,50 @@ export function useTradeExecution() {
       setState((prev) => ({ ...prev, step: "signing" }));
 
       try {
-        // Create the swap transaction
-        const swapTx = await dflowClient.createSwap(quote.quoteId, wallet.address);
-
-        setState((prev) => ({
-          ...prev,
-          orderId: swapTx.orderId,
-        }));
-
-        // Decode the unsigned transaction
-        const txBuffer = Buffer.from(swapTx.transaction, "base64");
+        // Decode the base64 transaction
+        const txBuffer = Buffer.from(order.transaction, "base64");
         const transaction = VersionedTransaction.deserialize(txBuffer);
 
-        // Sign with Privy wallet using the address method
-        // Note: Privy v3 handles signing through the wallet provider
-        setState((prev) => ({ ...prev, step: "signing" }));
-
-        // Get the wallet provider and sign
-        // For now, we'll use the sendTransaction approach which handles signing internally
-        const connection = new Connection(SOLANA_RPC_URL, "confirmed");
-
-        // Use Privy's signTransaction if available, otherwise throw helpful error
-        if ("signTransaction" in connectedWallet && typeof connectedWallet.signTransaction === "function") {
-          const signedTx = await (connectedWallet as ConnectedWallet & { signTransaction: (tx: VersionedTx) => Promise<VersionedTx> }).signTransaction(transaction);
+        // Sign with Privy wallet
+        if (
+          "signTransaction" in connectedWallet &&
+          typeof connectedWallet.signTransaction === "function"
+        ) {
+          const signedTx = await (
+            connectedWallet as ConnectedWallet & {
+              signTransaction: (tx: VersionedTx) => Promise<VersionedTx>;
+            }
+          ).signTransaction(transaction);
 
           // Submit to Solana
           setState((prev) => ({ ...prev, step: "submitting" }));
+          const connection = new Connection(SOLANA_RPC_URL, "confirmed");
           const signature = await connection.sendRawTransaction(
             signedTx.serialize(),
-            {
-              skipPreflight: false,
-              maxRetries: 3,
-            }
+            { skipPreflight: false, maxRetries: 3 }
           );
 
           setState((prev) => ({ ...prev, txSignature: signature }));
 
-          // Wait for confirmation
-          const confirmation = await connection.confirmTransaction(
+          // All prediction market trades are async — poll for fills
+          setState((prev) => ({ ...prev, step: "polling" }));
+          const finalStatus = await pollOrderStatus(
             signature,
-            "confirmed"
+            order.lastValidBlockHeight ?? undefined
           );
 
-          if (confirmation.value.err) {
-            throw new Error(`Transaction failed: ${confirmation.value.err}`);
-          }
+          setState((prev) => ({
+            ...prev,
+            step: "completed",
+            orderStatus: finalStatus,
+          }));
+
+          return finalStatus.status === "closed" && finalStatus.fills.length > 0;
         } else {
-          // Fallback: The wallet doesn't support signTransaction directly
-          // This means we need Privy's Solana adapter (requires @privy-io/react-auth/solana)
-          throw new Error("Wallet does not support Solana transactions. Please use a Solana-compatible wallet.");
+          throw new Error(
+            "Wallet does not support Solana transactions. Please use a Solana-compatible wallet."
+          );
         }
-
-        // Poll for order completion
-        setState((prev) => ({ ...prev, step: "polling" }));
-        const finalStatus = await pollOrderStatus(swapTx.orderId);
-
-        setState((prev) => ({
-          ...prev,
-          step: "completed",
-          orderStatus: finalStatus,
-        }));
-
-        return true;
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Trade execution failed";
@@ -226,20 +244,24 @@ export function useTradeExecution() {
   );
 
   /**
-   * Poll for order status until filled or failed
+   * Poll order status until terminal state
    */
   const pollOrderStatus = async (
-    orderId: string,
+    signature: string,
+    lastValidBlockHeight?: number,
     maxAttempts = 30,
     intervalMs = 2000
-  ): Promise<OrderStatus> => {
+  ): Promise<OrderStatusResponse> => {
     for (let i = 0; i < maxAttempts; i++) {
-      const status = await dflowClient.getOrderStatus(orderId);
+      const status = await dflowClient.getOrderStatus(
+        signature,
+        lastValidBlockHeight
+      );
 
       if (
-        status.status === "filled" ||
-        status.status === "cancelled" ||
-        status.status === "expired"
+        status.status === "closed" ||
+        status.status === "expired" ||
+        status.status === "failed"
       ) {
         return status;
       }
@@ -251,24 +273,21 @@ export function useTradeExecution() {
   };
 
   /**
-   * Combined function to get quote and execute trade
+   * Combined: get order + execute trade
    */
   const trade = useCallback(
     async (params: TradeParams): Promise<boolean> => {
-      const quote = await getQuote(params);
-      if (!quote) return false;
-
-      // Auto-execute after getting quote
-      // In the trade modal, we'll split this to show confirmation first
-      return executeTrade(quote);
+      const order = await getOrder(params);
+      if (!order) return false;
+      return executeTrade(order);
     },
-    [getQuote, executeTrade]
+    [getOrder, executeTrade]
   );
 
   return {
     state,
     isReady: isAuthenticated && !!wallet,
-    getQuote,
+    getOrder,
     executeTrade,
     trade,
     reset,

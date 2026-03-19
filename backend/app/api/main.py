@@ -10,6 +10,7 @@ from app.api.routes import auth, candles, current, health, mobile, orderbook, si
 from app.core.cache import get_redis_client, close_redis_client
 from app.core.http_client import get_http_client, close_http_client
 from app.core.config import settings
+from app.data.kalshi_ws import get_ws_manager
 from app.db.database import init_db
 
 
@@ -18,12 +19,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan events."""
     # Startup
     await init_db()
-    await get_redis_client()  # Initialize Redis connection
-    await get_http_client()  # Initialize HTTP client with connection pooling
+    await get_redis_client()
+    await get_http_client()
+    ws_manager = get_ws_manager()
+    await ws_manager.start()
     yield
     # Shutdown
-    await close_http_client()  # Close HTTP client
-    await close_redis_client()  # Close Redis connection
+    await ws_manager.stop()
+    await close_http_client()
+    await close_redis_client()
 
 
 app = FastAPI(
